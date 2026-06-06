@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Lindoze Process Manager
+GenericName=System Monitor
+Comment=Win11-style system monitor with per-thread CPU grid
+Exec=/home/aaron/lindoze/run.sh
+Icon=utilities-system-monitor
+Terminal=false
+Categories=System;Monitor;Qt;
+Keywords=process;monitor;cpu;gpu;system;task;manager;lindoze;
+StartupWMClass=Lindoze Process Manager

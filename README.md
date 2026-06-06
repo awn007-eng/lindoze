@@ -1,0 +1,87 @@
+# Lindoze Process Manager
+
+A Linux system monitor with the layout of Windows 11 Task Manager.
+
+Most Linux system monitors (gnome-system-monitor, ksysguard, even the
+otherwise-excellent mission-center) collapse every CPU thread into a single
+overlaid graph. On a 32-thread machine that's unreadable. Lindoze gives you
+the per-thread grid you remember from Windows Task Manager, plus the rest of
+the Task Manager layout — sortable processes, performance pages, startup
+apps — in a single Qt app that feels native to KDE / GNOME / any modern
+Linux desktop.
+
+## Screenshots
+
+The Performance tab defaults to the per-thread grid (right-click or toggle
+button to switch to the aggregate view):
+
+![CPU per-thread grid](docs/screenshots/cpu-grid.png)
+
+Processes tab — sortable tree, search, end-task / kill / suspend / renice:
+
+![Processes tab](docs/screenshots/processes.png)
+
+Startup apps tab — toggle XDG autostart entries with a 10-second undo:
+
+![Startup tab](docs/screenshots/startup.png)
+
+## Features (v0.1)
+
+- **Performance tab** with per-resource sub-navigation
+  - **CPU** — aggregate + per-logical-processor grid (auto-sized; handles 2 to 128+ threads)
+  - **Memory** — usage, swap, cached/buffers from /proc/meminfo
+  - **GPU** — NVIDIA (via NVML) and AMD (via sysfs); multi-GPU systems show one page per GPU
+  - **Disk** — per-physical-device R/W throughput
+  - **Network** — per-interface RX/TX throughput
+- **Processes tab** — sortable tree with User / System grouping, search, right-click actions
+  (End task, Kill, Suspend/Resume, Set priority, Open file location, Properties)
+- **Startup apps tab** — `~/.config/autostart/*.desktop` entries; one-click toggle with
+  10-second undo and automatic `.bak` files
+
+## Requirements
+
+- Python 3.10+
+- A Qt 6-capable Linux desktop (KDE, GNOME, etc.)
+- For GPU pages:
+  - **NVIDIA**: the proprietary driver (provides NVML)
+  - **AMD**: any modern `amdgpu` driver (kernel `>=5.0`); no extra packages needed
+  - **Intel**: not yet supported (planned for v0.2)
+
+## Install
+
+### From source (current path)
+
+```bash
+git clone https://github.com/awn007-eng/lindoze.git
+cd lindoze
+python3 -m venv .venv
+.venv/bin/pip install -e .
+.venv/bin/lindoze
+```
+
+To get a Start-menu entry, copy `packaging/lindoze.desktop` into
+`~/.local/share/applications/` and edit the `Exec=` path to point at your
+`run.sh`.
+
+### Flatpak
+
+Not yet shipping on Flathub — coming in a future release.
+
+## Limitations / not yet supported
+
+- **No Intel GPU page** — `intel_gpu_top` would need to be shelled out for live util
+  numbers; deferred to v0.2.
+- **No per-process GPU/Network columns** — these need root or eBPF on Linux. The
+  totals are accurate; per-process attribution isn't.
+- **No Services tab** — systemd unit management is well-covered by KDE's System
+  Settings and `systemctl`; we're not duplicating it.
+- **No Users tab** — single-user desktop assumption.
+
+## Credits
+
+Inspired by Dave Plummer's work on the original Windows Task Manager. This is a
+tribute, not an affiliation.
+
+## License
+
+GPL-3.0-or-later. See [LICENSE](LICENSE).
