@@ -30,7 +30,7 @@ Startup apps tab — toggle XDG autostart entries with a 10-second undo:
 - **Performance tab** with per-resource sub-navigation
   - **CPU** — aggregate + per-logical-processor grid (auto-sized; handles 2 to 128+ threads)
   - **Memory** — usage, swap, cached/buffers from /proc/meminfo
-  - **GPU** — NVIDIA (via NVML) and AMD (via sysfs); multi-GPU systems show one page per GPU
+  - **GPU** — NVIDIA (via NVML), AMD (via sysfs), Intel (experimental — i915 perf PMU + hwmon); multi-GPU systems show one page per GPU
   - **Disk** — per-physical-device R/W throughput
   - **Network** — per-interface RX/TX throughput
 - **Processes tab** — sortable tree with User / System grouping, search, right-click actions
@@ -45,7 +45,9 @@ Startup apps tab — toggle XDG autostart entries with a 10-second undo:
 - For GPU pages:
   - **NVIDIA**: the proprietary driver (provides NVML)
   - **AMD**: any modern `amdgpu` driver (kernel `>=5.0`); no extra packages needed
-  - **Intel**: not yet supported (planned for v0.2)
+  - **Intel** (experimental): `i915` driver, kernel `>=5.13` for the perf PMU; reads engine
+    utilization via `perf_event_open` and temp/freq via sysfs+hwmon. No subprocess, no root.
+    The `xe` driver degrades to temp/freq only — Arc-on-xe testing pending.
 
 ## Install
 
@@ -69,8 +71,6 @@ Not yet shipping on Flathub — coming in a future release.
 
 ## Limitations / not yet supported
 
-- **No Intel GPU page** — `intel_gpu_top` would need to be shelled out for live util
-  numbers; deferred to v0.2.
 - **No per-process GPU/Network columns** — these need root or eBPF on Linux. The
   totals are accurate; per-process attribution isn't.
 - **No Services tab** — systemd unit management is well-covered by KDE's System

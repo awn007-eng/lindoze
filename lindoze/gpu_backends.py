@@ -4,12 +4,15 @@ uniform sample() interface per device.
 Supported vendors:
 - NVIDIA via NVML (pynvml)
 - AMD via sysfs (/sys/class/drm/cardN/device/...)
-
-Intel is intentionally out of scope for v1 — its integrated-GPU sysfs surface
-is sparse and the live-util counters require shelling out to intel_gpu_top.
+- Intel (experimental, i915 driver) via sysfs/hwmon for static stats and the
+  i915 perf PMU for live engine utilization. Xe-driver GPUs degrade to
+  temp/freq only until a v0.3 tester reports back.
 """
 from __future__ import annotations
 
+import ctypes
+import ctypes.util
+import os
 import subprocess
 from pathlib import Path
 from typing import Optional
@@ -165,7 +168,239 @@ class AMDBackend:
         )
 
 
+# ---- Intel backend (sysfs + hwmon + i915 perf PMU)
+#
+# i915 doesn't expose AMD-style aggregate gpu_busy_percent. For live util we
+# open the i915 perf PMU (one fd per engine) via perf_event_open(). The PMU
+# returns a monotonically-increasing busy-ns counter per engine; sampling the
+# delta against wall time gives a per-engine busy %. We average across engines
+# for an overall figure, matching how intel_gpu_top labels "overall".
+#
+# Static stats (temp/power/freq) come from sysfs+hwmon and work even if the
+# PMU path fails (sandboxed env, perf_event_paranoid sysctl, etc.). In that
+# case util reports None and the page draws "—".
+
+# x86_64 syscall number for perf_event_open. ARM64 is 241; we'd add a lookup
+# table when someone runs Lindoze on aarch64 Intel hw (basically never).
+_SYS_PERF_EVENT_OPEN = 298
+
+
+class _PerfEventAttr(ctypes.Structure):
+    # Subset of struct perf_event_attr — we only need to set type/size/config.
+    # The trailing pad reaches PERF_ATTR_SIZE_VER7 (128 bytes) so the kernel
+    # accepts the size field across reasonably current kernels.
+    _fields_ = [
+        ("type", ctypes.c_uint32),
+        ("size", ctypes.c_uint32),
+        ("config", ctypes.c_uint64),
+        ("sample_period_or_freq", ctypes.c_uint64),
+        ("sample_type", ctypes.c_uint64),
+        ("read_format", ctypes.c_uint64),
+        ("flags", ctypes.c_uint64),
+        ("_pad", ctypes.c_uint8 * 96),
+    ]
+
+
+def _open_perf_event(pmu_type: int, config: int, cpu: int) -> Optional[int]:
+    """perf_event_open for a single i915 PMU event. Returns fd or None."""
+    libc = ctypes.CDLL(ctypes.util.find_library("c") or "libc.so.6", use_errno=True)
+    attr = _PerfEventAttr()
+    attr.type = pmu_type
+    attr.size = ctypes.sizeof(_PerfEventAttr)
+    attr.config = config
+    # pid=-1, cpu=N → system-wide counter on that CPU. Group fd=-1, flags=0.
+    fd = libc.syscall(
+        ctypes.c_long(_SYS_PERF_EVENT_OPEN),
+        ctypes.byref(attr), ctypes.c_int(-1), ctypes.c_int(cpu),
+        ctypes.c_int(-1), ctypes.c_ulong(0),
+    )
+    return fd if fd >= 0 else None
+
+
+def _read_pmu_counter(fd: int) -> Optional[int]:
+    try:
+        data = os.read(fd, 8)
+        if len(data) != 8:
+            return None
+        return int.from_bytes(data, "little", signed=False)
+    except OSError:
+        return None
+
+
+def _lspci_name_intel(pci_vendor: str, pci_device: str) -> str:
+    # Same shape as _lspci_name but stripping Intel marketing prefixes.
+    try:
+        out = subprocess.check_output(
+            ["lspci", "-d", f"{pci_vendor.removeprefix('0x')}:{pci_device.removeprefix('0x')}"],
+            text=True, timeout=2,
+        )
+        if ":" in out:
+            after_class = out.split(":", 2)[-1].strip()
+            if "(" in after_class:
+                after_class = after_class[: after_class.rindex("(")].strip()
+            for prefix in ("Intel Corporation ", "Intel Corp. ", "Intel "):
+                if after_class.startswith(prefix):
+                    after_class = after_class[len(prefix):]
+                    break
+            return f"Intel {after_class}"
+    except (subprocess.SubprocessError, OSError, FileNotFoundError):
+        pass
+    return "Intel GPU"
+
+
+class IntelBackend:
+    vendor = "intel"
+
+    def __init__(self, card_path: Path) -> None:
+        self.card_path = card_path
+        self.device_path = card_path / "device"
+        vendor = _read_text(self.device_path / "vendor") or ""
+        device = _read_text(self.device_path / "device") or ""
+        self.name = _lspci_name_intel(vendor, device)
+
+        # hwmon: i915 driver registers a hwmon device under device/hwmon/.
+        hwmons = list((self.device_path / "hwmon").glob("hwmon*")) \
+            if (self.device_path / "hwmon").exists() else []
+        self.hwmon = hwmons[0] if hwmons else None
+
+        # i915 frequency sysfs nodes (mhz). Xe uses different paths; if these
+        # don't exist we just report clk_core=None.
+        self._freq_cur = self.device_path / "gt_cur_freq_mhz"
+        self._freq_max = self.device_path / "gt_max_freq_mhz"
+
+        # PMU setup — best-effort. Any failure → no util reading.
+        self._pmu_fds: list[int] = []
+        self._pmu_prev_ns: list[int] = []
+        self._pmu_prev_wall: Optional[int] = None
+        self._setup_pmu()
+
+    def _setup_pmu(self) -> None:
+        pmu_dir = Path("/sys/bus/event_source/devices/i915")
+        if not pmu_dir.exists():
+            return
+        pmu_type = _read_int(pmu_dir / "type")
+        if pmu_type is None:
+            return
+        # Pick a CPU from the PMU's cpumask (i915 PMU is bound to one CPU).
+        cpumask_text = _read_text(pmu_dir / "cpumask") or "0"
+        try:
+            cpu = int(cpumask_text.split("-")[0].split(",")[0])
+        except ValueError:
+            cpu = 0
+        # Each events/*-busy file holds e.g. "event=0x0" or "event=0x1000".
+        events_dir = pmu_dir / "events"
+        if not events_dir.exists():
+            return
+        for ev_file in sorted(events_dir.glob("*-busy")):
+            config = self._parse_event_config(ev_file)
+            if config is None:
+                continue
+            fd = _open_perf_event(pmu_type, config, cpu)
+            if fd is None:
+                continue
+            self._pmu_fds.append(fd)
+            self._pmu_prev_ns.append(0)
+        # Prime initial reads so the first sample() reports a real delta.
+        if self._pmu_fds:
+            for i, fd in enumerate(self._pmu_fds):
+                v = _read_pmu_counter(fd)
+                if v is not None:
+                    self._pmu_prev_ns[i] = v
+            self._pmu_prev_wall = self._monotonic_ns()
+
+    @staticmethod
+    def _parse_event_config(ev_file: Path) -> Optional[int]:
+        text = _read_text(ev_file)
+        if not text:
+            return None
+        # Format is "event=0xN" or "event=0xN,umask=..." — we only need event=.
+        for part in text.split(","):
+            kv = part.strip().split("=", 1)
+            if len(kv) == 2 and kv[0] == "event":
+                try:
+                    return int(kv[1], 0)
+                except ValueError:
+                    return None
+        return None
+
+    @staticmethod
+    def _monotonic_ns() -> int:
+        # time.monotonic_ns wall-clock proxy; matches PMU's CLOCK_MONOTONIC.
+        import time
+        return time.monotonic_ns()
+
+    def _sample_util(self) -> Optional[int]:
+        if not self._pmu_fds or self._pmu_prev_wall is None:
+            return None
+        now_wall = self._monotonic_ns()
+        elapsed = now_wall - self._pmu_prev_wall
+        if elapsed <= 0:
+            return None
+        busy_sum = 0
+        n = 0
+        for i, fd in enumerate(self._pmu_fds):
+            v = _read_pmu_counter(fd)
+            if v is None:
+                continue
+            delta = v - self._pmu_prev_ns[i]
+            self._pmu_prev_ns[i] = v
+            if delta < 0:
+                delta = 0  # counter rolled or reset
+            busy_sum += delta
+            n += 1
+        self._pmu_prev_wall = now_wall
+        if n == 0:
+            return None
+        # Average engine busy % across the engines we managed to open.
+        avg = (busy_sum * 100) // (elapsed * n)
+        return max(0, min(100, int(avg)))
+
+    def sample(self) -> dict:
+        util = self._sample_util()
+
+        temp = power = None
+        if self.hwmon is not None:
+            t = _read_int(self.hwmon / "temp1_input")
+            if t is not None:
+                temp = t // 1000
+            # i915 hwmon publishes energy1_input (microjoules cumulative), not
+            # instantaneous power. We'd need to delta it; for v0.2 we just
+            # check for a direct power1_average if it exists (some platforms).
+            p = _read_int(self.hwmon / "power1_average")
+            if p is not None:
+                power = p / 1_000_000
+
+        clk_core = _read_int(self._freq_cur)
+
+        # Intel iGPUs share system RAM; no dedicated VRAM sysfs surface
+        # without debugfs/root. Mark as integrated so the page labels power
+        # consistently with AMD APUs.
+        return dict(
+            name=self.name, util=util, mem_used=0, mem_total=0,
+            temp=temp, power=power, clk_core=clk_core, clk_mem=None,
+            enc=None, dec=None, is_integrated=True,
+        )
+
+
 # ---- Detection
+
+def _detect_intel() -> list[IntelBackend]:
+    backends: list[IntelBackend] = []
+    drm = Path("/sys/class/drm")
+    if not drm.exists():
+        return backends
+    for card in sorted(drm.glob("card*")):
+        if "-" in card.name:
+            continue
+        if _read_text(card / "device" / "vendor") != "0x8086":
+            continue
+        driver_link = card / "device" / "driver"
+        driver = driver_link.resolve().name if driver_link.exists() else ""
+        if driver not in ("i915", "xe"):
+            continue
+        backends.append(IntelBackend(card))
+    return backends
+
 
 def _detect_amd() -> list[AMDBackend]:
     backends: list[AMDBackend] = []
@@ -196,4 +431,4 @@ def _detect_nvidia() -> list[NVIDIABackend]:
 def detect_gpus() -> list:
     """All detected GPUs across vendors. Order is stable across runs (NVIDIA
     by NVML index, AMD by sysfs cardN order)."""
-    return _detect_nvidia() + _detect_amd()
+    return _detect_nvidia() + _detect_amd() + _detect_intel()

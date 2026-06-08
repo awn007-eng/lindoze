@@ -71,9 +71,9 @@ class GPUPage(QWidget):
         if not g:
             return
         self._name.setText(g.get("name", ""))
-        util = g.get("util", 0) or 0
-        self._util_g.push(util)
-        self._util[1].setText(f"{util}%")
+        util = g.get("util")
+        self._util_g.push(util if util is not None else 0)
+        self._util[1].setText(f"{util}%" if util is not None else "—")
         mt = g.get("mem_total", 0) or 0
         mu = g.get("mem_used", 0) or 0
         pct = 100.0 * mu / mt if mt else 0
