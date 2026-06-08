@@ -263,10 +263,18 @@ class IntelBackend:
             if (self.device_path / "hwmon").exists() else []
         self.hwmon = hwmons[0] if hwmons else None
 
-        # i915 frequency sysfs nodes (mhz). Xe uses different paths; if these
-        # don't exist we just report clk_core=None.
-        self._freq_cur = self.device_path / "gt_cur_freq_mhz"
-        self._freq_max = self.device_path / "gt_max_freq_mhz"
+        # i915 frequency sysfs nodes (mhz). Modern kernels expose these under
+        # card_path/ directly; older Gen7 (Ivy Bridge) instead places them at
+        # device_path/gt_*_freq_mhz. Xe uses different paths again; if none of
+        # the candidates exist we report clk_core=None.
+        self._freq_cur = self._pick_existing(
+            self.card_path / "gt_cur_freq_mhz",
+            self.device_path / "gt_cur_freq_mhz",
+        )
+        self._freq_max = self._pick_existing(
+            self.card_path / "gt_max_freq_mhz",
+            self.device_path / "gt_max_freq_mhz",
+        )
 
         # PMU setup — best-effort. Any failure → no util reading.
         self._pmu_fds: list[int] = []
@@ -307,6 +315,13 @@ class IntelBackend:
                 if v is not None:
                     self._pmu_prev_ns[i] = v
             self._pmu_prev_wall = self._monotonic_ns()
+
+    @staticmethod
+    def _pick_existing(*candidates: Path) -> Optional[Path]:
+        for p in candidates:
+            if p.exists():
+                return p
+        return None
 
     @staticmethod
     def _parse_event_config(ev_file: Path) -> Optional[int]:
@@ -370,7 +385,7 @@ class IntelBackend:
             if p is not None:
                 power = p / 1_000_000
 
-        clk_core = _read_int(self._freq_cur)
+        clk_core = _read_int(self._freq_cur) if self._freq_cur else None
 
         # Intel iGPUs share system RAM; no dedicated VRAM sysfs surface
         # without debugfs/root. Mark as integrated so the page labels power
@@ -432,3 +447,66 @@ def detect_gpus() -> list:
     """All detected GPUs across vendors. Order is stable across runs (NVIDIA
     by NVML index, AMD by sysfs cardN order)."""
     return _detect_nvidia() + _detect_amd() + _detect_intel()
+
+
+# ---- Diagnostics
+
+def dump_gpus(stream=None) -> None:
+    """Verbose GPU-detection dump for bug reports. Writes raw sysfs/PMU state
+    so a user can paste a single block of output and have everything we need
+    to debug an Intel/AMD/NVIDIA detection or sampling failure."""
+    import sys
+    import time
+    if stream is None:
+        stream = sys.stderr
+
+    def p(msg: str = "") -> None:
+        print(msg, file=stream)
+
+    p("=== Lindoze GPU diagnostic dump ===")
+    drm = Path("/sys/class/drm")
+    p(f"/sys/class/drm exists: {drm.exists()}")
+    if drm.exists():
+        for card in sorted(drm.glob("card*")):
+            if "-" in card.name:
+                continue
+            vendor = _read_text(card / "device" / "vendor")
+            device = _read_text(card / "device" / "device")
+            driver_link = card / "device" / "driver"
+            driver = driver_link.resolve().name if driver_link.exists() else "(none)"
+            p(f"  {card.name}: vendor={vendor} device={device} driver={driver}")
+
+    pmu_dir = Path("/sys/bus/event_source/devices/i915")
+    p(f"\ni915 PMU dir exists: {pmu_dir.exists()}")
+    if pmu_dir.exists():
+        p(f"  type      = {_read_text(pmu_dir / 'type')}")
+        p(f"  cpumask   = {_read_text(pmu_dir / 'cpumask')}")
+        events_dir = pmu_dir / "events"
+        if events_dir.exists():
+            for ev in sorted(events_dir.glob("*")):
+                p(f"  events/{ev.name} = {_read_text(ev)}")
+
+    paranoid = _read_text(Path("/proc/sys/kernel/perf_event_paranoid"))
+    p(f"\nperf_event_paranoid = {paranoid}")
+
+    backends = detect_gpus()
+    p(f"\nDetected backends: {len(backends)}")
+    for b in backends:
+        p(f"\n--- {b.vendor}: {b.name}")
+        if isinstance(b, IntelBackend):
+            p(f"  card_path   = {b.card_path}")
+            p(f"  device_path = {b.device_path}")
+            p(f"  freq_cur    = {b._freq_cur}  ->  {_read_int(b._freq_cur) if b._freq_cur else None}")
+            p(f"  freq_max    = {b._freq_max}  ->  {_read_int(b._freq_max) if b._freq_max else None}")
+            p(f"  hwmon       = {b.hwmon}")
+            p(f"  pmu_fds     = {b._pmu_fds}")
+            p(f"  pmu_prev_ns = {b._pmu_prev_ns}")
+            # Take two samples ~250ms apart so the user sees a real util read.
+            s1 = b.sample()
+            time.sleep(0.25)
+            s2 = b.sample()
+            p(f"  sample[0]   = {s1}")
+            p(f"  sample[1]   = {s2}")
+        else:
+            p(f"  sample      = {b.sample()}")
+    p("\n=== end dump ===")

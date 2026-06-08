@@ -25,7 +25,7 @@ Startup apps tab — toggle XDG autostart entries with a 10-second undo:
 
 ![Startup tab](docs/screenshots/startup.png)
 
-## Features (v0.1)
+## Features (v0.2)
 
 - **Performance tab** with per-resource sub-navigation
   - **CPU** — aggregate + per-logical-processor grid (auto-sized; handles 2 to 128+ threads)
@@ -47,7 +47,10 @@ Startup apps tab — toggle XDG autostart entries with a 10-second undo:
   - **AMD**: any modern `amdgpu` driver (kernel `>=5.0`); no extra packages needed
   - **Intel** (experimental): `i915` driver, kernel `>=5.13` for the perf PMU; reads engine
     utilization via `perf_event_open` and temp/freq via sysfs+hwmon. No subprocess, no root.
-    The `xe` driver degrades to temp/freq only — Arc-on-xe testing pending.
+    The `xe` driver degrades to temp/freq only — Arc-on-xe testing pending. Older Gen7
+    (Ivy Bridge) hardware is known thin: freq reads work via fallback sysfs path but
+    PMU util may return 0. **If your Intel GPU is detected but util/temp/freq look wrong,
+    please run `lindoze --dump-gpu` and file an issue with the output.**
 
 ## Install
 
