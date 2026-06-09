@@ -28,6 +28,8 @@ def main() -> int:
     setproctitle.setproctitle("lindoze")
 
     app = QApplication(sys.argv)
+    app.setOrganizationName("Lindoze")
+    app.setOrganizationDomain("lindoze.local")
     app.setApplicationName("Lindoze Process Manager")
     win = MainWindow()
     win.show()

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PySide6.QtCore import QSize, Qt
+from PySide6.QtCore import QByteArray, QSettings, QSize, Qt
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QHBoxLayout,
@@ -55,6 +55,11 @@ class MainWindow(QMainWindow):
         self.resize(1200, 760)
         self.setStyleSheet(WINDOW_DARK)
 
+        self._settings = QSettings()
+        geom = self._settings.value("window/geometry")
+        if isinstance(geom, QByteArray) and not geom.isEmpty():
+            self.restoreGeometry(geom)
+
         self.outer_sidebar = QListWidget()
         self.outer_sidebar.setFixedWidth(150)
         self.outer_sidebar.setStyleSheet(OUTER_SIDEBAR)
@@ -93,10 +98,26 @@ class MainWindow(QMainWindow):
         # an uninitialized attribute.
         self.outer_sidebar.currentRowChanged.connect(self.stack.setCurrentIndex)
         self.outer_sidebar.currentRowChanged.connect(self._on_tab_changed)
-        # Default to Performance — the per-thread grid was the whole point of
-        # building this thing; make it the welcome screen.
-        self.outer_sidebar.setCurrentRow(1)
+        # Restore last-viewed tab; default to Performance — the per-thread grid
+        # was the whole point of building this thing.
+        last_tab = self._settings.value("window/last_tab", 1, type=int)
+        if not 0 <= last_tab < self.outer_sidebar.count():
+            last_tab = 1
+        self.outer_sidebar.setCurrentRow(last_tab)
+
+        header_state = self._settings.value("processes/header_state")
+        if isinstance(header_state, QByteArray) and not header_state.isEmpty():
+            self.processes_page.tree.header().restoreState(header_state)
 
     def _on_tab_changed(self, row: int) -> None:
         # Row 0 = Processes, Row 1 = Performance.
         self.process_sampler.set_active(row == 0)
+
+    def closeEvent(self, event) -> None:
+        self._settings.setValue("window/geometry", self.saveGeometry())
+        self._settings.setValue("window/last_tab", self.outer_sidebar.currentRow())
+        self._settings.setValue(
+            "processes/header_state",
+            self.processes_page.tree.header().saveState(),
+        )
+        super().closeEvent(event)
