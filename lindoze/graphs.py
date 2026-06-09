@@ -16,8 +16,14 @@ LABEL_COLOR = QColor(220, 220, 220)
 class MiniGraph(QWidget):
     """Filled area sparkline with optional grid + label.
 
-    history_len: samples kept (60 == 60s @ 1Hz, matches Task Manager).
+    history_len: number of samples drawn (60 == 60s @ 1Hz, matches Task Manager).
+    max_history: deque capacity. Defaults to history_len; pass a larger value to
+        let the buffer accumulate more samples than are currently displayed —
+        scale toggles can then re-render historical data without losing it.
     y_max: if None, autoscales to max observed (for throughput); else fixed (100 for %).
+
+    The buffer starts empty: graphs grow in from the right edge rather than
+    sitting on a misleading flat-zero baseline at launch.
     """
 
     def __init__(
@@ -29,10 +35,13 @@ class MiniGraph(QWidget):
         label: str = "",
         compact: bool = False,
         show_scale: bool = False,
+        max_history: int | None = None,
         parent=None,
     ) -> None:
         super().__init__(parent)
-        self._buf: deque[float] = deque([0.0] * history_len, maxlen=history_len)
+        cap = max_history if max_history is not None else history_len
+        self._buf: deque[float] = deque(maxlen=cap)
+        self._display_len = max(2, history_len)
         self._y_max_fixed = y_max
         self._autoscale_peak = 1.0
         self.accent = accent
@@ -50,6 +59,12 @@ class MiniGraph(QWidget):
         if self._y_max_fixed is None:
             self._autoscale_peak = max(self._autoscale_peak * 0.99, v, 1.0)
         self.update()
+
+    def set_display_len(self, n: int) -> None:
+        n = max(2, min(n, self._buf.maxlen or n))
+        if n != self._display_len:
+            self._display_len = n
+            self.update()
 
     def current(self) -> float:
         return self._buf[-1] if self._buf else 0.0
@@ -76,21 +91,30 @@ class MiniGraph(QWidget):
                 y = r.top() + r.height() * i / 10
                 p.drawLine(r.left(), int(y), r.right(), int(y))
 
-        # Data
-        n = len(self._buf)
-        if n < 2:
+        # Data — right-anchored: newest sample at right edge, oldest at
+        # right - (display_len-1)*step. Buffer may hold more than we display
+        # (when max_history > display_len) so the scale toggle can re-render
+        # without losing history.
+        n_have = len(self._buf)
+        if n_have < 2:
             p.end()
             return
+        display = self._display_len
+        n_draw = min(n_have, display)
+        samples = list(self._buf)[-n_draw:]
         ymax = self.y_max() or 1.0
         w = r.width()
         h = r.height()
+        step = w / (display - 1)
+        oldest_x = r.right() - (n_draw - 1) * step
+
         path = QPainterPath()
-        path.moveTo(r.left(), r.bottom())
-        for i, v in enumerate(self._buf):
-            x = r.left() + w * i / (n - 1)
+        path.moveTo(oldest_x, r.bottom())
+        for i, v in enumerate(samples):
+            x = oldest_x + i * step
             y = r.bottom() - (min(v, ymax) / ymax) * h
             path.lineTo(x, y)
-        path.lineTo(r.right(), r.bottom())
+        path.lineTo(oldest_x + (n_draw - 1) * step, r.bottom())
         path.closeSubpath()
 
         fill = QColor(self.accent)
@@ -98,13 +122,11 @@ class MiniGraph(QWidget):
         p.fillPath(path, QBrush(fill))
 
         stroke_path = QPainterPath()
-        first = True
-        for i, v in enumerate(self._buf):
-            x = r.left() + w * i / (n - 1)
+        for i, v in enumerate(samples):
+            x = oldest_x + i * step
             y = r.bottom() - (min(v, ymax) / ymax) * h
-            if first:
+            if i == 0:
                 stroke_path.moveTo(x, y)
-                first = False
             else:
                 stroke_path.lineTo(x, y)
         p.setPen(QPen(self.accent, 1.4))

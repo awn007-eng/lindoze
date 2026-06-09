@@ -24,8 +24,8 @@ class DiskPage(QWidget):
         self.device = device
         title = QLabel(f"Disk — {device}")
         f = QFont(); f.setPointSize(20); f.setBold(True); title.setFont(f)
-        self._read = MiniGraph(y_max=None, accent=DISK_ACCENT, label="Read")
-        self._write = MiniGraph(y_max=None, accent=DISK_ACCENT, label="Write")
+        self._read = MiniGraph(y_max=None, accent=DISK_ACCENT, label="Read", max_history=3600)
+        self._write = MiniGraph(y_max=None, accent=DISK_ACCENT, label="Write", max_history=3600)
 
         stats = QWidget(); sg = QGridLayout(stats)
         self._lr = self._stat(sg, 0, 0, "Read speed")
@@ -66,8 +66,8 @@ class NetPage(QWidget):
         self.iface = iface
         title = QLabel(f"Network — {iface}")
         f = QFont(); f.setPointSize(20); f.setBold(True); title.setFont(f)
-        self._rx = MiniGraph(y_max=None, accent=NET_ACCENT, label="Receive")
-        self._tx = MiniGraph(y_max=None, accent=NET_ACCENT, label="Send")
+        self._rx = MiniGraph(y_max=None, accent=NET_ACCENT, label="Receive", max_history=3600)
+        self._tx = MiniGraph(y_max=None, accent=NET_ACCENT, label="Send", max_history=3600)
 
         stats = QWidget(); sg = QGridLayout(stats)
         self._lrx = self._stat(sg, 0, 0, "Receive")

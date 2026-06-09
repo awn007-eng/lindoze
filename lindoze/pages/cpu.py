@@ -64,7 +64,7 @@ class CPUPage(QWidget):
         self._stack = QStackedWidget()
 
         # --- Aggregate view
-        self._agg = MiniGraph(y_max=100.0, accent=CPU_ACCENT, show_scale=True)
+        self._agg = MiniGraph(y_max=100.0, accent=CPU_ACCENT, show_scale=True, max_history=3600)
         self._stack.addWidget(self._agg)
 
         # --- Per-thread grid (8 cols x 4 rows for 32 threads; falls back gracefully)
@@ -76,7 +76,7 @@ class CPUPage(QWidget):
         rows = (n_threads + cols - 1) // cols
         self._cells: list[MiniGraph] = []
         for i in range(n_threads):
-            mg = MiniGraph(y_max=100.0, accent=CPU_ACCENT, compact=True, label=f"CPU {i}")
+            mg = MiniGraph(y_max=100.0, accent=CPU_ACCENT, compact=True, label=f"CPU {i}", max_history=3600)
             self._cells.append(mg)
             grid.addWidget(mg, i // cols, i % cols)
         self._stack.addWidget(grid_w)

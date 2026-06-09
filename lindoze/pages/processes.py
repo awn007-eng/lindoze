@@ -7,6 +7,7 @@ behavior closer than a strict PPID tree does.
 """
 from __future__ import annotations
 
+import html as _html
 import os
 import signal
 import subprocess
@@ -20,15 +21,27 @@ from PySide6.QtCore import (
     QSortFilterProxyModel,
     Qt,
 )
-from PySide6.QtGui import QAction, QColor, QFont
+from PySide6.QtGui import (
+    QAbstractTextDocumentLayout,
+    QAction,
+    QColor,
+    QFont,
+    QPalette,
+    QTextDocument,
+)
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QApplication,
     QHBoxLayout,
     QHeaderView,
+    QLabel,
     QLineEdit,
     QMenu,
     QMessageBox,
     QPushButton,
+    QStyle,
+    QStyledItemDelegate,
+    QStyleOptionViewItem,
     QTreeView,
     QVBoxLayout,
     QWidget,
@@ -262,6 +275,73 @@ class ProcessProxy(QSortFilterProxyModel):
         return n in snap.name.lower() or n in snap.cmdline.lower() or n in str(snap.pid)
 
 
+class HighlightDelegate(QStyledItemDelegate):
+    """Render the search needle in bold accent color within a cell.
+
+    Falls through to the default delegate when there's no needle or the cell
+    doesn't contain a match — so non-matching cells (including most group
+    headers) keep their normal styling and font-role overrides.
+    """
+
+    ACCENT = "#17a2b8"
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self._needle = ""
+
+    def set_needle(self, s: str) -> None:
+        self._needle = s.lower().strip()
+
+    def paint(self, painter, option, index):
+        text = index.data(Qt.DisplayRole)
+        if not text or not self._needle:
+            return super().paint(painter, option, index)
+        t = str(text)
+        low = t.lower()
+        n = self._needle
+        if n not in low:
+            return super().paint(painter, option, index)
+
+        opt = QStyleOptionViewItem(option)
+        self.initStyleOption(opt, index)
+        opt.text = ""
+        style = (opt.widget.style() if opt.widget else QApplication.style())
+        style.drawControl(QStyle.CE_ItemViewItem, opt, painter, opt.widget)
+
+        parts: list[str] = []
+        i = 0
+        while i < len(t):
+            j = low.find(n, i)
+            if j < 0:
+                parts.append(_html.escape(t[i:]))
+                break
+            if j > i:
+                parts.append(_html.escape(t[i:j]))
+            parts.append(
+                f'<span style="color:{self.ACCENT};font-weight:700;">'
+                f'{_html.escape(t[j:j + len(n)])}</span>'
+            )
+            i = j + len(n)
+
+        doc = QTextDocument()
+        doc.setDefaultFont(opt.font)
+        doc.setDocumentMargin(0)
+        doc.setHtml("".join(parts))
+
+        text_rect = style.subElementRect(QStyle.SE_ItemViewItemText, opt, opt.widget)
+        ctx = QAbstractTextDocumentLayout.PaintContext()
+        if opt.state & QStyle.State_Selected:
+            ctx.palette.setColor(QPalette.Text, opt.palette.color(QPalette.HighlightedText))
+        else:
+            ctx.palette.setColor(QPalette.Text, opt.palette.color(QPalette.Text))
+
+        painter.save()
+        painter.translate(text_rect.topLeft())
+        painter.setClipRect(0, 0, text_rect.width(), text_rect.height())
+        doc.documentLayout().draw(painter, ctx)
+        painter.restore()
+
+
 class ProcessesPage(QWidget):
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -274,6 +354,8 @@ class ProcessesPage(QWidget):
             "QLineEdit { background: #2a2a2a; border: 1px solid #444; "
             "border-radius: 3px; padding: 4px 8px; color: #ddd; }"
         )
+        self._match_label = QLabel("")
+        self._match_label.setStyleSheet("QLabel { color: #888; padding: 0 8px; }")
         self._end_btn = QPushButton("End task")
         self._end_btn.setStyleSheet(
             "QPushButton { background: #2a2a2a; border: 1px solid #444; "
@@ -284,6 +366,7 @@ class ProcessesPage(QWidget):
         self._end_btn.setEnabled(False)
         self._end_btn.clicked.connect(self._end_task_selected)
         toolbar.addWidget(self._search, stretch=1)
+        toolbar.addWidget(self._match_label)
         toolbar.addWidget(self._end_btn)
 
         self._model = ProcessModel(self)
@@ -315,7 +398,11 @@ class ProcessesPage(QWidget):
         self.tree.header().setSortIndicator(3, Qt.DescendingOrder)  # CPU% desc by default
         self.tree.selectionModel().selectionChanged.connect(self._on_selection)
 
-        self._search.textChanged.connect(self._proxy.set_needle)
+        self._highlight = HighlightDelegate(self.tree)
+        self.tree.setItemDelegateForColumn(0, self._highlight)
+        self.tree.setItemDelegateForColumn(1, self._highlight)
+
+        self._search.textChanged.connect(self._on_search_changed)
 
         root = QVBoxLayout(self)
         root.setContentsMargins(10, 10, 10, 10)
@@ -333,6 +420,21 @@ class ProcessesPage(QWidget):
             for r in range(self._proxy.rowCount()):
                 self.tree.expand(self._proxy.index(r, 0))
             self._expanded_once = True
+        if self._search.text().strip():
+            self._on_search_changed(self._search.text())
+
+    # ---- Search
+    def _on_search_changed(self, text: str) -> None:
+        self._proxy.set_needle(text)
+        self._highlight.set_needle(text)
+        self.tree.viewport().update()
+        if not text.strip():
+            self._match_label.setText("")
+            return
+        count = 0
+        for r in range(self._proxy.rowCount()):
+            count += self._proxy.rowCount(self._proxy.index(r, 0))
+        self._match_label.setText(f"{count} match" if count == 1 else f"{count} matches")
 
     # ---- Selection
     def _on_selection(self, *_args) -> None:

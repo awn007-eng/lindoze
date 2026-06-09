@@ -9,13 +9,14 @@ from __future__ import annotations
 import os
 
 import psutil
-from PySide6.QtCore import QSize
+from PySide6.QtCore import QSettings, QSize
 from PySide6.QtGui import QColor, QFont
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QListWidget,
     QListWidgetItem,
+    QPushButton,
     QStackedWidget,
     QVBoxLayout,
     QWidget,
@@ -121,11 +122,57 @@ class PerformancePage(QWidget):
         self.sidebar.currentRowChanged.connect(self.stack.setCurrentIndex)
         self.sidebar.setCurrentRow(0)
 
+        # Time-scale toolbar — top of the right pane. Applies globally to all
+        # detail-page graphs; sidebar mini-graphs stay at 60s (they're 54px
+        # wide, larger scales just produce noise).
+        self._scale_buttons: list[tuple[int, QPushButton]] = []
+        scale_bar = QHBoxLayout()
+        scale_bar.setContentsMargins(8, 6, 8, 6)
+        scale_bar.setSpacing(4)
+        scale_bar.addStretch(1)
+        time_lbl = QLabel("Time")
+        time_lbl.setStyleSheet("color: #888; padding-right: 6px;")
+        scale_bar.addWidget(time_lbl)
+        for label_text, seconds in [("60s", 60), ("10min", 600), ("1hr", 3600)]:
+            btn = QPushButton(label_text)
+            btn.setCheckable(True)
+            btn.setFixedWidth(56)
+            btn.setStyleSheet(
+                "QPushButton { background: #2a2a2a; border: 1px solid #444; "
+                "border-radius: 3px; padding: 3px 6px; color: #ccc; } "
+                "QPushButton:hover { background: #353535; } "
+                "QPushButton:checked { background: #17a2b8; color: white; "
+                "border: 1px solid #17a2b8; }"
+            )
+            btn.clicked.connect(lambda _c=False, s=seconds: self.set_time_scale(s))
+            self._scale_buttons.append((seconds, btn))
+            scale_bar.addWidget(btn)
+
+        right = QWidget()
+        right_layout = QVBoxLayout(right)
+        right_layout.setContentsMargins(0, 0, 0, 0)
+        right_layout.setSpacing(0)
+        right_layout.addLayout(scale_bar)
+        right_layout.addWidget(self.stack, stretch=1)
+
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
         layout.addWidget(self.sidebar)
-        layout.addWidget(self.stack, stretch=1)
+        layout.addWidget(right, stretch=1)
+
+        self._settings = QSettings()
+        saved = self._settings.value("performance/time_scale", 60, type=int)
+        if saved not in (60, 600, 3600):
+            saved = 60
+        self.set_time_scale(saved)
+
+    def set_time_scale(self, seconds: int) -> None:
+        for g in self.stack.findChildren(MiniGraph):
+            g.set_display_len(seconds)
+        for sec, btn in self._scale_buttons:
+            btn.setChecked(sec == seconds)
+        self._settings.setValue("performance/time_scale", seconds)
 
     def _add_entry(self, row: SidebarRow, page: QWidget) -> None:
         item = QListWidgetItem(self.sidebar)

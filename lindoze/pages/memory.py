@@ -20,7 +20,7 @@ class MemoryPage(QWidget):
         f = QFont(); f.setPointSize(20); f.setBold(True)
         title.setFont(f)
 
-        self._graph = MiniGraph(y_max=100.0, accent=MEM_ACCENT, show_scale=True)
+        self._graph = MiniGraph(y_max=100.0, accent=MEM_ACCENT, show_scale=True, max_history=3600)
 
         stats = QWidget()
         sg = QGridLayout(stats)
