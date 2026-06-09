@@ -59,11 +59,14 @@ Startup apps tab — toggle XDG autostart entries with a 10-second undo:
 If you have [`pipx`](https://pipx.pypa.io/) installed, one command does it:
 
 ```bash
-pipx install git+https://github.com/awn007-eng/lindoze.git
+pipx install lindoze
 lindoze
 ```
 
 Update later with `pipx upgrade lindoze`; remove with `pipx uninstall lindoze`.
+
+To track the development branch instead of the latest release, install from
+git: `pipx install git+https://github.com/awn007-eng/lindoze.git`.
 
 (`pipx` itself: `sudo apt install pipx` on Ubuntu/Debian, `sudo dnf install pipx`
 on Fedora/Nobara, `sudo pacman -S python-pipx` on Arch.)
