@@ -73,7 +73,6 @@ class CPUPage(QWidget):
         grid.setContentsMargins(0, 0, 0, 0)
         grid.setSpacing(2)
         cols = 8 if n_threads >= 16 else 4
-        rows = (n_threads + cols - 1) // cols
         self._cells: list[MiniGraph] = []
         for i in range(n_threads):
             mg = MiniGraph(y_max=100.0, accent=CPU_ACCENT, compact=True, label=f"CPU {i}", max_history=3600)

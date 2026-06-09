@@ -23,7 +23,6 @@ from PySide6.QtCore import (
 )
 from PySide6.QtGui import (
     QAbstractTextDocumentLayout,
-    QAction,
     QColor,
     QFont,
     QPalette,
@@ -179,7 +178,6 @@ class ProcessModel(QAbstractItemModel):
 
     def _update_group(self, group: Node, group_row: int, new: dict[int, ProcSnap]) -> None:
         current_pids = [c.pid for c in group.children]
-        current_set = set(current_pids)
         new_set = set(new.keys())
 
         group_idx = self.createIndex(group_row, 0, group)
@@ -263,7 +261,6 @@ class ProcessProxy(QSortFilterProxyModel):
             return True  # always accept group headers
         if not self._needle:
             return True
-        src = self.sourceModel()
         parent_node: Node = parent_idx.internalPointer()
         if row >= len(parent_node.children):
             return False

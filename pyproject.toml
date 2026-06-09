@@ -41,3 +41,17 @@ lindoze = "lindoze.__main__:main"
 [tool.setuptools.packages.find]
 include = ["lindoze*"]
 exclude = ["tests*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+# Lean ruleset: pyflakes (real bugs + unused) only. The codebase uses the
+# `x = Foo(); x.setBar(...)` compact-widget-construction style heavily, which
+# would trip default pycodestyle E702 — keeping ruff to F-only avoids fighting
+# the intentional style.
+select = ["F"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

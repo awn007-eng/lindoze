@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections import deque
 
-from PySide6.QtCore import Qt, QPointF
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QPainter, QPainterPath, QPen, QBrush, QFont
 from PySide6.QtWidgets import QWidget, QSizePolicy
 

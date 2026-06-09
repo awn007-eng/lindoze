@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PySide6.QtCore import QByteArray, QSettings, QSize, Qt
+from PySide6.QtCore import QByteArray, QSettings, QSize
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QHBoxLayout,
