@@ -54,19 +54,33 @@ Startup apps tab — toggle XDG autostart entries with a 10-second undo:
 
 ## Install
 
-### From source (current path)
+### Quick install with pipx (recommended)
+
+If you have [`pipx`](https://pipx.pypa.io/) installed, one command does it:
+
+```bash
+pipx install git+https://github.com/awn007-eng/lindoze.git
+lindoze
+```
+
+Update later with `pipx upgrade lindoze`; remove with `pipx uninstall lindoze`.
+
+(`pipx` itself: `sudo apt install pipx` on Ubuntu/Debian, `sudo dnf install pipx`
+on Fedora/Nobara, `sudo pacman -S python-pipx` on Arch.)
+
+### From source (for hacking / customization)
 
 ```bash
 git clone https://github.com/awn007-eng/lindoze.git
 cd lindoze
-python3 -m venv .venv
-.venv/bin/pip install -e .
-.venv/bin/lindoze
+./bootstrap.sh
+./run.sh
 ```
 
-To get a Start-menu entry, copy `packaging/lindoze.desktop` into
-`~/.local/share/applications/` and edit the `Exec=` path to point at your
-`run.sh`.
+`bootstrap.sh` creates a local `.venv/`, installs dependencies, drops a
+Start-menu entry into `~/.local/share/applications/`, and installs the
+bundled icon. Safe to re-run — it's idempotent. Launch via `./run.sh` or
+your desktop's Start menu.
 
 ### Flatpak
 
