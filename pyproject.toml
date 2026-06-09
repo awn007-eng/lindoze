@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lindoze"
-version = "0.2.3"
+version = "0.2.4"
 description = "Linux system monitor with Windows 11 Task Manager layout"
 readme = "README.md"
 license = { text = "GPL-3.0-or-later" }
@@ -33,7 +33,8 @@ dependencies = [
 
 [project.urls]
 Homepage = "https://github.com/awn007-eng/lindoze"
-Issues = "https://github.com/awn007-eng/lindoze/issues"
+Repository = "https://github.com/awn007-eng/lindoze"
+"Bug Tracker" = "https://github.com/awn007-eng/lindoze/issues"
 
 [project.gui-scripts]
 lindoze = "lindoze.__main__:main"
