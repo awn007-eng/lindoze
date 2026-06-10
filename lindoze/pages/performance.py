@@ -178,6 +178,12 @@ class PerformancePage(QWidget):
         self._rows.append((row, page))
 
     def on_sample(self, s) -> None:
+        # Skip the whole fan-out when the Performance tab isn't the active
+        # outer tab — Qt's isVisible() returns False for non-current children
+        # of a QStackedWidget. Saves ~40 MiniGraph.push() + repaint schedules
+        # per tick while the user is on Processes or Startup.
+        if not self.isVisible():
+            return
         self.cpu_page.on_sample(s)
         self.mem_page.on_sample(s)
         for p in self.gpu_pages:

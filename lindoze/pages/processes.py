@@ -67,6 +67,20 @@ ME = os.getenv("USER") or "aaron"
 # tabular figures so digits and unit suffixes line up vertically.
 NUMERIC_COLS = {1, 3, 4, 5, 7}
 
+# Module-level cached fonts/colors. data() is called for every visible cell on
+# every dataChanged emission — allocating fresh QFont / QColor objects per call
+# was a measurable chunk of UI thread time on the Processes tab.
+def _build_role_cache():
+    mono = QFont("Monospace"); mono.setStyleHint(QFont.Monospace)
+    mono_bold = QFont("Monospace"); mono_bold.setStyleHint(QFont.Monospace); mono_bold.setBold(True)
+    bold = QFont(); bold.setBold(True)
+    align_right_vcenter = int(Qt.AlignRight | Qt.AlignVCenter)
+    return mono, mono_bold, bold, align_right_vcenter
+
+_FONT_MONO, _FONT_MONO_BOLD, _FONT_BOLD, _ALIGN_RIGHT_VCENTER = _build_role_cache()
+_FG_GROUP = QColor("#9ecaff")
+_BG_GROUP = QColor(23, 162, 184, 32)
+
 
 def _fmt_bytes(n: int) -> str:
     units = ["B", "KB", "MB", "GB", "TB"]
@@ -140,21 +154,16 @@ class ProcessModel(QAbstractItemModel):
         col = idx.column()
 
         if role == Qt.TextAlignmentRole and col in NUMERIC_COLS:
-            return int(Qt.AlignRight | Qt.AlignVCenter)
+            return _ALIGN_RIGHT_VCENTER
         if role == Qt.FontRole:
             if col in NUMERIC_COLS:
-                f = QFont("Monospace"); f.setStyleHint(QFont.Monospace)
-                if node.snap is None:
-                    f.setBold(True)
-                return f
+                return _FONT_MONO_BOLD if node.snap is None else _FONT_MONO
             if node.snap is None:
-                f = QFont(); f.setBold(True); return f
+                return _FONT_BOLD
         if role == Qt.ForegroundRole and node.snap is None:
-            return QColor("#9ecaff")
+            return _FG_GROUP
         if role == Qt.BackgroundRole and node.snap is None:
-            # Faint teal-tinted band so group headers read as section dividers
-            # rather than just-bolder rows.
-            return QColor(23, 162, 184, 32)
+            return _BG_GROUP
         if role == Qt.DisplayRole:
             if node.snap is None:
                 if col == 0:

@@ -53,6 +53,37 @@ class MiniGraph(QWidget):
         self.show_scale = show_scale
         self.setMinimumSize(40, 24) if compact else self.setMinimumSize(120, 60)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        # Cached brushes and pens — rebuilt only when the widget resizes,
+        # not on every paint. The wash + fill gradients depend on geometry
+        # so they were the most expensive per-paint allocations.
+        self._wash_brush: QBrush | None = None
+        self._fill_brush: QBrush | None = None
+        self._trace_pen = QPen(self.accent, 1.8)
+        self._border_pen = QPen(QColor(255, 255, 255, 18), 1)
+        self._grid_pen = QPen(GRID_COLOR, 1)
+        self._label_font = QFont()
+        self._label_font.setPointSize(7 if compact else 8)
+        self._scale_font = QFont(); self._scale_font.setPointSize(8)
+
+    def _build_brushes(self) -> None:
+        r = self.rect()
+        wash = QLinearGradient(0, r.top(), 0, r.bottom())
+        wash_top = QColor(self.accent); wash_top.setAlpha(0)
+        wash_bot = QColor(self.accent); wash_bot.setAlpha(28)
+        wash.setColorAt(0.0, wash_top)
+        wash.setColorAt(1.0, wash_bot)
+        self._wash_brush = QBrush(wash)
+        fill = QLinearGradient(0, r.top(), 0, r.bottom())
+        hi = QColor(self.accent); hi.setAlpha(110)
+        lo = QColor(self.accent); lo.setAlpha(18)
+        fill.setColorAt(0.0, hi)
+        fill.setColorAt(1.0, lo)
+        self._fill_brush = QBrush(fill)
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        self._wash_brush = None
+        self._fill_brush = None
 
     def push(self, v: float) -> None:
         self._buf.append(v)
@@ -78,29 +109,24 @@ class MiniGraph(QWidget):
         r = self.rect()
         p.fillRect(r, BG_COLOR)
 
-        # Whole-cell accent wash — fades from invisible at the top to a faint
-        # tint at the bottom. Gives idle/flat cells presence even when the
-        # data trace is sitting on the baseline.
-        wash = QLinearGradient(0, r.top(), 0, r.bottom())
-        wash_top = QColor(self.accent); wash_top.setAlpha(0)
-        wash_bot = QColor(self.accent); wash_bot.setAlpha(28)
-        wash.setColorAt(0.0, wash_top)
-        wash.setColorAt(1.0, wash_bot)
-        p.fillRect(r, QBrush(wash))
+        if self._wash_brush is None or self._fill_brush is None:
+            self._build_brushes()
+        p.fillRect(r, self._wash_brush)
 
-        # Border — kept softer than default Qt frame so the per-thread grid
+        # Border kept softer than default Qt frame so the per-thread grid
         # at idle reads as "32 quiet cells" rather than "grid of empty boxes."
-        p.setPen(QPen(QColor(255, 255, 255, 18), 1))
+        p.setPen(self._border_pen)
         p.drawRect(r.adjusted(0, 0, -1, -1))
 
-        # Grid
         if self.show_grid and not self.compact:
-            p.setPen(QPen(GRID_COLOR, 1))
+            p.setPen(self._grid_pen)
+            w_grid = r.width()
+            h_grid = r.height()
             for i in range(1, 10):
-                x = r.left() + r.width() * i / 10
-                p.drawLine(int(x), r.top(), int(x), r.bottom())
-                y = r.top() + r.height() * i / 10
-                p.drawLine(r.left(), int(y), r.right(), int(y))
+                x = int(r.left() + w_grid * i / 10)
+                p.drawLine(x, r.top(), x, r.bottom())
+                y = int(r.top() + h_grid * i / 10)
+                p.drawLine(r.left(), y, r.right(), y)
 
         # Data — right-anchored: newest sample at right edge, oldest at
         # right - (display_len-1)*step. Buffer may hold more than we display
@@ -108,6 +134,7 @@ class MiniGraph(QWidget):
         # without losing history.
         n_have = len(self._buf)
         if n_have < 2:
+            self._paint_label(p, r)
             p.end()
             return
         display = self._display_len
@@ -118,52 +145,39 @@ class MiniGraph(QWidget):
         h = r.height()
         step = w / (display - 1)
         oldest_x = r.right() - (n_draw - 1) * step
+        bottom_y = r.bottom()
 
-        path = QPainterPath()
-        path.moveTo(oldest_x, r.bottom())
-        for i, v in enumerate(samples):
-            x = oldest_x + i * step
-            y = r.bottom() - (min(v, ymax) / ymax) * h
-            path.lineTo(x, y)
-        path.lineTo(oldest_x + (n_draw - 1) * step, r.bottom())
-        path.closeSubpath()
-
-        # Vertical gradient under the trace: full-strength accent at the top
-        # of the fill, fading to a faint wash at the cell baseline. Idle/flat
-        # traces still look alive instead of a bare line on dark grey.
-        grad = QLinearGradient(0, r.top(), 0, r.bottom())
-        hi = QColor(self.accent); hi.setAlpha(110)
-        lo = QColor(self.accent); lo.setAlpha(18)
-        grad.setColorAt(0.0, hi)
-        grad.setColorAt(1.0, lo)
-        p.fillPath(path, QBrush(grad))
-
+        # Single point pass — feeds both the filled area path and the trace
+        # stroke path so we don't recompute (x, y) for every sample twice.
+        fill_path = QPainterPath()
         stroke_path = QPainterPath()
+        fill_path.moveTo(oldest_x, bottom_y)
+        first = True
         for i, v in enumerate(samples):
             x = oldest_x + i * step
-            y = r.bottom() - (min(v, ymax) / ymax) * h
-            if i == 0:
-                stroke_path.moveTo(x, y)
+            y = bottom_y - (min(v, ymax) / ymax) * h
+            fill_path.lineTo(x, y)
+            if first:
+                stroke_path.moveTo(x, y); first = False
             else:
                 stroke_path.lineTo(x, y)
-        p.setPen(QPen(self.accent, 1.8))
+        fill_path.lineTo(oldest_x + (n_draw - 1) * step, bottom_y)
+        fill_path.closeSubpath()
+
+        p.fillPath(fill_path, self._fill_brush)
+        p.setPen(self._trace_pen)
         p.drawPath(stroke_path)
 
-        # Scale markers (top-left = ymax, bottom-left = 0) for big single-graph
-        # pages; otherwise fall back to the inline label (used by grid cells
-        # like "CPU 0" and the multi-graph Disk/Network/GPU pages).
+        self._paint_label(p, r)
+        p.end()
+
+    def _paint_label(self, p: QPainter, r) -> None:
         if self.show_scale:
-            font = QFont()
-            font.setPointSize(8)
-            p.setFont(font)
+            p.setFont(self._scale_font)
             p.setPen(LABEL_COLOR)
             p.drawText(r.adjusted(4, 2, -4, -4), Qt.AlignTop | Qt.AlignLeft, "100%")
             p.drawText(r.adjusted(4, 2, -4, -4), Qt.AlignBottom | Qt.AlignLeft, "0%")
         elif self.label:
-            font = QFont()
-            font.setPointSize(7 if self.compact else 8)
-            p.setFont(font)
+            p.setFont(self._label_font)
             p.setPen(LABEL_COLOR)
             p.drawText(r.adjusted(3, 1, -3, -3), Qt.AlignTop | Qt.AlignLeft, self.label)
-
-        p.end()
