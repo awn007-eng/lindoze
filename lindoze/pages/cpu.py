@@ -65,22 +65,43 @@ class CPUPage(QWidget):
         self._agg = MiniGraph(y_max=100.0, accent=CPU_ACCENT, show_scale=True, max_history=3600)
         self._stack.addWidget(self._agg)
 
-        # --- Per-thread grid. Cells have a readable floor (100x50) and the
-        # column count reflows on resize to fit the available viewport width.
-        # If even one row of cells exceeds the viewport vertically (high-core
-        # systems), the scroll area handles overflow vertically.
+        # --- Per-thread grid. Cells have a readable floor (100x50) and a cap
+        # (220x180) so low-core systems on tall windows don't get skyscraper
+        # sparklines. Cell height tracks ~0.6 of width for a Win11-ish aspect.
+        # Column count reflows on resize; when total grid size is smaller than
+        # the viewport, outer stretches center it both axes. If the grid
+        # exceeds viewport vertically (high-core systems), the scroll area
+        # handles overflow.
         self._grid_cell_min_w = 100
         self._grid_cell_min_h = 50
+        self._grid_cell_max_w = 250
+        self._grid_cell_max_h = 200
+        self._grid_cell_aspect = 0.6  # h / w
         self._grid_cols = 0  # set by _reflow_grid on first resize
-        self._grid_w = QWidget()
-        self._grid_layout = QGridLayout(self._grid_w)
+        self._grid_inner = QWidget()
+        self._grid_layout = QGridLayout(self._grid_inner)
         self._grid_layout.setContentsMargins(0, 0, 0, 0)
         self._grid_layout.setSpacing(2)
+        self._grid_layout.setSizeConstraint(QGridLayout.SetMinAndMaxSize)
         self._cells: list[MiniGraph] = []
         for i in range(n_threads):
             mg = MiniGraph(y_max=100.0, accent=CPU_ACCENT, compact=True, label=f"CPU {i}", max_history=3600)
-            mg.setMinimumSize(self._grid_cell_min_w, self._grid_cell_min_h)
+            mg.setFixedSize(self._grid_cell_min_w, self._grid_cell_min_h)
             self._cells.append(mg)
+
+        self._grid_w = QWidget()
+        outer_v = QVBoxLayout(self._grid_w)
+        outer_v.setContentsMargins(0, 0, 0, 0)
+        outer_v.setSpacing(0)
+        outer_v.addStretch(1)
+        h_center = QHBoxLayout()
+        h_center.setContentsMargins(0, 0, 0, 0)
+        h_center.setSpacing(0)
+        h_center.addStretch(1)
+        h_center.addWidget(self._grid_inner)
+        h_center.addStretch(1)
+        outer_v.addLayout(h_center)
+        outer_v.addStretch(1)
 
         self._grid_scroll = QScrollArea()
         self._grid_scroll.setWidget(self._grid_w)
@@ -92,7 +113,12 @@ class CPUPage(QWidget):
         self._stack.addWidget(self._grid_scroll)
 
         # Seed an initial layout so cells aren't unplaced before first paint.
-        self._reflow_grid(self._initial_cols(n_threads))
+        # Use the floor cell size — resizeEvent will recompute on first show.
+        self._reflow_grid(
+            self._initial_cols(n_threads),
+            self._grid_cell_min_w,
+            self._grid_cell_min_h,
+        )
 
         # Right-click on either view -> switch
         self._agg.setContextMenuPolicy(Qt.CustomContextMenu)
@@ -138,30 +164,59 @@ class CPUPage(QWidget):
         cols = max(1, (viewport_w + spacing) // denom)
         return min(int(cols), self._n)
 
-    def _reflow_grid(self, cols: int) -> None:
-        if cols == self._grid_cols or cols < 1:
+    def _cell_size_for(self, viewport_w: int, viewport_h: int, cols: int) -> tuple[int, int]:
+        """Pick a cell (w, h) that fills available width up to the cap, with
+        height tracking the aspect ratio, clamped to floor/ceiling. If the
+        resulting grid would overflow vertically, shrink height (but not below
+        the floor) so a few extra rows fit before scrolling kicks in."""
+        spacing = self._grid_layout.spacing()
+        cell_w = (viewport_w - (cols - 1) * spacing) // cols if cols > 0 else self._grid_cell_min_w
+        cell_w = max(self._grid_cell_min_w, min(int(cell_w), self._grid_cell_max_w))
+        cell_h = int(cell_w * self._grid_cell_aspect)
+        cell_h = max(self._grid_cell_min_h, min(cell_h, self._grid_cell_max_h))
+        rows = (self._n + cols - 1) // cols if cols > 0 else 1
+        max_h_fit = (viewport_h - (rows - 1) * spacing) // rows if rows > 0 else cell_h
+        if max_h_fit < cell_h:
+            cell_h = max(self._grid_cell_min_h, int(max_h_fit))
+        return cell_w, cell_h
+
+    def _reflow_grid(self, cols: int, cell_w: int, cell_h: int) -> None:
+        size_changed = False
+        if self._cells and (
+            self._cells[0].width() != cell_w or self._cells[0].height() != cell_h
+        ):
+            for mg in self._cells:
+                mg.setFixedSize(cell_w, cell_h)
+            size_changed = True
+        if cols == self._grid_cols and not size_changed:
             return
-        for mg in self._cells:
-            self._grid_layout.removeWidget(mg)
-        n = len(self._cells)
-        full_rows, last_count = divmod(n, cols)
-        # Center the partial last row so cells like a 4-cell tail in a 7-col
-        # grid sit under the middle of the rows above instead of left-clinging.
-        last_pad = (cols - last_count) // 2 if last_count else 0
-        for i, mg in enumerate(self._cells):
-            row = i // cols
-            col_in_row = i % cols
-            col = (last_pad + col_in_row) if row == full_rows else col_in_row
-            self._grid_layout.addWidget(mg, row, col)
-        self._grid_cols = cols
+        if cols < 1:
+            return
+        if cols != self._grid_cols:
+            for mg in self._cells:
+                self._grid_layout.removeWidget(mg)
+            n = len(self._cells)
+            full_rows, last_count = divmod(n, cols)
+            # Center the partial last row so cells like a 4-cell tail in a 7-col
+            # grid sit under the middle of the rows above instead of left-clinging.
+            last_pad = (cols - last_count) // 2 if last_count else 0
+            for i, mg in enumerate(self._cells):
+                row = i // cols
+                col_in_row = i % cols
+                col = (last_pad + col_in_row) if row == full_rows else col_in_row
+                self._grid_layout.addWidget(mg, row, col)
+            self._grid_cols = cols
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
         if self._grid_scroll is None or self._grid_w is None:
             return
         viewport_w = self._grid_scroll.viewport().width()
+        viewport_h = self._grid_scroll.viewport().height()
         if viewport_w > 0:
-            self._reflow_grid(self._cols_for_width(viewport_w))
+            cols = self._cols_for_width(viewport_w)
+            cell_w, cell_h = self._cell_size_for(viewport_w, viewport_h, cols)
+            self._reflow_grid(cols, cell_w, cell_h)
 
     @staticmethod
     def _stat(grid: QGridLayout, r: int, c: int, label: str):
