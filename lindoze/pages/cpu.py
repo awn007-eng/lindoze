@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QMenu,
+    QScrollArea,
     QStackedWidget,
     QToolButton,
     QVBoxLayout,
@@ -17,6 +18,7 @@ from PySide6.QtWidgets import (
 
 from ..graphs import MiniGraph
 from ..sampler import cpu_model
+from ..styles import BUTTON_QSS
 
 CPU_ACCENT = QColor("#17a2b8")  # Win11 teal-cyan
 
@@ -47,11 +49,7 @@ class CPUPage(QWidget):
         self._view_btn.setText("Overall")
         self._view_btn.setToolTip("Toggle aggregate / logical processors")
         self._view_btn.setCursor(Qt.PointingHandCursor)
-        self._view_btn.setStyleSheet(
-            "QToolButton { color: #ddd; background: #2a2a2a; border: 1px solid #444; "
-            "border-radius: 3px; padding: 4px 10px; } "
-            "QToolButton:hover { background: #353535; }"
-        )
+        self._view_btn.setStyleSheet(BUTTON_QSS + " QToolButton { padding: 4px 10px; }")
         self._view_btn.clicked.connect(self._toggle_view)
 
         title_box.addWidget(title)
@@ -67,24 +65,40 @@ class CPUPage(QWidget):
         self._agg = MiniGraph(y_max=100.0, accent=CPU_ACCENT, show_scale=True, max_history=3600)
         self._stack.addWidget(self._agg)
 
-        # --- Per-thread grid (8 cols x 4 rows for 32 threads; falls back gracefully)
-        grid_w = QWidget()
-        grid = QGridLayout(grid_w)
-        grid.setContentsMargins(0, 0, 0, 0)
-        grid.setSpacing(2)
-        cols = 8 if n_threads >= 16 else 4
+        # --- Per-thread grid. Cells have a readable floor (100x50) and the
+        # column count reflows on resize to fit the available viewport width.
+        # If even one row of cells exceeds the viewport vertically (high-core
+        # systems), the scroll area handles overflow vertically.
+        self._grid_cell_min_w = 100
+        self._grid_cell_min_h = 50
+        self._grid_cols = 0  # set by _reflow_grid on first resize
+        self._grid_w = QWidget()
+        self._grid_layout = QGridLayout(self._grid_w)
+        self._grid_layout.setContentsMargins(0, 0, 0, 0)
+        self._grid_layout.setSpacing(2)
         self._cells: list[MiniGraph] = []
         for i in range(n_threads):
             mg = MiniGraph(y_max=100.0, accent=CPU_ACCENT, compact=True, label=f"CPU {i}", max_history=3600)
+            mg.setMinimumSize(self._grid_cell_min_w, self._grid_cell_min_h)
             self._cells.append(mg)
-            grid.addWidget(mg, i // cols, i % cols)
-        self._stack.addWidget(grid_w)
+
+        self._grid_scroll = QScrollArea()
+        self._grid_scroll.setWidget(self._grid_w)
+        self._grid_scroll.setWidgetResizable(True)
+        self._grid_scroll.setFrameShape(QScrollArea.NoFrame)
+        # Vertical scroll only — horizontal overflow is prevented by reflow.
+        self._grid_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self._grid_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self._stack.addWidget(self._grid_scroll)
+
+        # Seed an initial layout so cells aren't unplaced before first paint.
+        self._reflow_grid(self._initial_cols(n_threads))
 
         # Right-click on either view -> switch
         self._agg.setContextMenuPolicy(Qt.CustomContextMenu)
         self._agg.customContextMenuRequested.connect(self._menu_aggregate)
-        grid_w.setContextMenuPolicy(Qt.CustomContextMenu)
-        grid_w.customContextMenuRequested.connect(self._menu_grid)
+        self._grid_w.setContextMenuPolicy(Qt.CustomContextMenu)
+        self._grid_w.customContextMenuRequested.connect(self._menu_grid)
 
         # Default to logical processors view — the reason this app exists.
         # Button label reads as the destination action, not the current state.
@@ -109,6 +123,45 @@ class CPUPage(QWidget):
         root.addLayout(title_box)
         root.addWidget(self._stack, stretch=3)
         root.addWidget(stats_w, stretch=1)
+
+    def _initial_cols(self, n_threads: int) -> int:
+        if n_threads >= 64:
+            return 16
+        if n_threads >= 16:
+            return 8
+        return 4
+
+    def _cols_for_width(self, viewport_w: int) -> int:
+        """How many columns fit in viewport_w at the cell-width floor."""
+        spacing = self._grid_layout.spacing()
+        denom = self._grid_cell_min_w + spacing
+        cols = max(1, (viewport_w + spacing) // denom)
+        return min(int(cols), self._n)
+
+    def _reflow_grid(self, cols: int) -> None:
+        if cols == self._grid_cols or cols < 1:
+            return
+        for mg in self._cells:
+            self._grid_layout.removeWidget(mg)
+        n = len(self._cells)
+        full_rows, last_count = divmod(n, cols)
+        # Center the partial last row so cells like a 4-cell tail in a 7-col
+        # grid sit under the middle of the rows above instead of left-clinging.
+        last_pad = (cols - last_count) // 2 if last_count else 0
+        for i, mg in enumerate(self._cells):
+            row = i // cols
+            col_in_row = i % cols
+            col = (last_pad + col_in_row) if row == full_rows else col_in_row
+            self._grid_layout.addWidget(mg, row, col)
+        self._grid_cols = cols
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        if self._grid_scroll is None or self._grid_w is None:
+            return
+        viewport_w = self._grid_scroll.viewport().width()
+        if viewport_w > 0:
+            self._reflow_grid(self._cols_for_width(viewport_w))
 
     @staticmethod
     def _stat(grid: QGridLayout, r: int, c: int, label: str):

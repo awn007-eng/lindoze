@@ -47,6 +47,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..process_sampler import ProcSnap
+from ..styles import BUTTON_QSS
 
 
 COLS = [
@@ -61,6 +62,10 @@ COLS = [
 ]
 
 ME = os.getenv("USER") or "aaron"
+
+# PID, CPU %, Memory, Disk, Threads — numeric columns get right-aligned
+# tabular figures so digits and unit suffixes line up vertically.
+NUMERIC_COLS = {1, 3, 4, 5, 7}
 
 
 def _fmt_bytes(n: int) -> str:
@@ -134,10 +139,22 @@ class ProcessModel(QAbstractItemModel):
         node: Node = idx.internalPointer()
         col = idx.column()
 
-        if role == Qt.FontRole and node.snap is None:
-            f = QFont(); f.setBold(True); return f
+        if role == Qt.TextAlignmentRole and col in NUMERIC_COLS:
+            return int(Qt.AlignRight | Qt.AlignVCenter)
+        if role == Qt.FontRole:
+            if col in NUMERIC_COLS:
+                f = QFont("Monospace"); f.setStyleHint(QFont.Monospace)
+                if node.snap is None:
+                    f.setBold(True)
+                return f
+            if node.snap is None:
+                f = QFont(); f.setBold(True); return f
         if role == Qt.ForegroundRole and node.snap is None:
             return QColor("#9ecaff")
+        if role == Qt.BackgroundRole and node.snap is None:
+            # Faint teal-tinted band so group headers read as section dividers
+            # rather than just-bolder rows.
+            return QColor(23, 162, 184, 32)
         if role == Qt.DisplayRole:
             if node.snap is None:
                 if col == 0:
@@ -354,12 +371,7 @@ class ProcessesPage(QWidget):
         self._match_label = QLabel("")
         self._match_label.setStyleSheet("QLabel { color: #888; padding: 0 8px; }")
         self._end_btn = QPushButton("End task")
-        self._end_btn.setStyleSheet(
-            "QPushButton { background: #2a2a2a; border: 1px solid #444; "
-            "border-radius: 3px; padding: 4px 14px; color: #ddd; } "
-            "QPushButton:hover { background: #353535; } "
-            "QPushButton:disabled { color: #666; }"
-        )
+        self._end_btn.setStyleSheet(BUTTON_QSS + " QPushButton { padding: 4px 14px; }")
         self._end_btn.setEnabled(False)
         self._end_btn.clicked.connect(self._end_task_selected)
         toolbar.addWidget(self._search, stretch=1)

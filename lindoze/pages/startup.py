@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QFont, QIcon
+from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -31,6 +31,8 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+from ..styles import BUTTON_QSS
 
 
 AUTOSTART_DIR = Path.home() / ".config" / "autostart"
@@ -135,14 +137,51 @@ def _set_hidden(path: Path, hidden: bool) -> None:
     path.write_text("\n".join(out) + ("\n" if out else ""), encoding="utf-8")
 
 
+_icon_cache: dict[str, QIcon] = {}
+_fallback_pm: Optional[QPixmap] = None
+
+
+def _make_fallback_pixmap() -> QPixmap:
+    """A neutral 32x32 placeholder used when the icon theme can't resolve a
+    name. Synthesized so we never paint an empty slot — even on cold theme
+    caches or systems missing application-x-executable."""
+    pm = QPixmap(32, 32)
+    pm.fill(Qt.transparent)
+    p = QPainter(pm)
+    p.setRenderHint(QPainter.Antialiasing)
+    p.setBrush(QColor("#3a3a3a"))
+    p.setPen(QColor("#555"))
+    p.drawRoundedRect(2, 2, 28, 28, 4, 4)
+    p.end()
+    return pm
+
+
+def _fallback_pixmap() -> QPixmap:
+    global _fallback_pm
+    if _fallback_pm is None:
+        # Prefer the theme's generic-executable icon; synthesize if missing.
+        ic = QIcon.fromTheme("application-x-executable")
+        pm = ic.pixmap(32, 32) if not ic.isNull() else QPixmap()
+        if pm.isNull():
+            pm = _make_fallback_pixmap()
+        _fallback_pm = pm
+    return _fallback_pm
+
+
 def _resolve_icon(icon_str: str) -> QIcon:
-    if icon_str and os.path.isabs(icon_str) and os.path.exists(icon_str):
-        return QIcon(icon_str)
-    if icon_str:
+    if not icon_str:
+        return QIcon()
+    cached = _icon_cache.get(icon_str)
+    if cached is not None:
+        return cached
+    if os.path.isabs(icon_str) and os.path.exists(icon_str):
+        ic = QIcon(icon_str)
+    else:
         ic = QIcon.fromTheme(icon_str)
-        if not ic.isNull():
-            return ic
-    return QIcon.fromTheme("application-x-executable")
+        if ic.isNull():
+            ic = QIcon.fromTheme("application-x-executable")
+    _icon_cache[icon_str] = ic
+    return ic
 
 
 # ---- Row widget
@@ -155,9 +194,14 @@ class _EntryRow(QWidget):
 
         icon_lbl = QLabel()
         icon_lbl.setFixedSize(36, 36)
-        pix = _resolve_icon(entry.icon).pixmap(32, 32)
-        icon_lbl.setPixmap(pix)
         icon_lbl.setAlignment(Qt.AlignCenter)
+        # Always paint *something* immediately. The themed icon resolution can
+        # be slow on a cold cache and would otherwise flash an empty slot
+        # before the real pixmap lands.
+        icon_lbl.setPixmap(_fallback_pixmap())
+        pix = _resolve_icon(entry.icon).pixmap(32, 32)
+        if not pix.isNull():
+            icon_lbl.setPixmap(pix)
 
         name = QLabel(entry.name)
         nf = QFont(); nf.setPointSize(11); nf.setBold(True)
@@ -269,11 +313,7 @@ class StartupPage(QWidget):
         self._sub.setStyleSheet("color: #999;")
 
         refresh = QPushButton("Refresh")
-        refresh.setStyleSheet(
-            "QPushButton { background: #2a2a2a; border: 1px solid #444; "
-            "border-radius: 3px; padding: 6px 14px; color: #ddd; } "
-            "QPushButton:hover { background: #353535; }"
-        )
+        refresh.setStyleSheet(BUTTON_QSS + " QPushButton { padding: 6px 14px; }")
         refresh.setCursor(Qt.PointingHandCursor)
         refresh.clicked.connect(self.reload)
 
@@ -305,10 +345,12 @@ class StartupPage(QWidget):
         self.list.setVerticalScrollMode(QListWidget.ScrollPerPixel)
 
         self._empty = QLabel(
-            "No autostart entries found in ~/.config/autostart/.\n"
-            "Apps that auto-launch via systemd user units are not shown here in v1."
+            "Nothing here yet — no apps are set to launch at login.\n\n"
+            "Apps land in this list when they drop a .desktop file into\n"
+            "~/.config/autostart/. Anything started via a systemd user unit\n"
+            "isn't shown here (that's planned for v2)."
         )
-        self._empty.setStyleSheet("color: #888; font-size: 11pt;")
+        self._empty.setStyleSheet("color: #aaa; font-size: 11pt; line-height: 140%;")
         self._empty.setAlignment(Qt.AlignCenter)
         self._empty.setVisible(False)
 

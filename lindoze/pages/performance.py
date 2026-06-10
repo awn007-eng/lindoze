@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
 
 from ..graphs import MiniGraph
 from ..sampler import gpu_names
+from ..styles import PILL_BUTTON_QSS
 from .cpu import CPUPage, CPU_ACCENT
 from .gpu import GPUPage, GPU_ACCENT
 from .io import DiskPage, NetPage, DISK_ACCENT, NET_ACCENT
@@ -137,13 +138,7 @@ class PerformancePage(QWidget):
             btn = QPushButton(label_text)
             btn.setCheckable(True)
             btn.setFixedWidth(56)
-            btn.setStyleSheet(
-                "QPushButton { background: #2a2a2a; border: 1px solid #444; "
-                "border-radius: 3px; padding: 3px 6px; color: #ccc; } "
-                "QPushButton:hover { background: #353535; } "
-                "QPushButton:checked { background: #17a2b8; color: white; "
-                "border: 1px solid #17a2b8; }"
-            )
+            btn.setStyleSheet(PILL_BUTTON_QSS + " QPushButton { padding: 3px 6px; }")
             btn.clicked.connect(lambda _c=False, s=seconds: self.set_time_scale(s))
             self._scale_buttons.append((seconds, btn))
             scale_bar.addWidget(btn)

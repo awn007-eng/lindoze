@@ -7,8 +7,9 @@ otherwise-excellent mission-center) collapse every CPU thread into a single
 overlaid graph. On a 32-thread machine that's unreadable. Lindoze gives you
 the per-thread grid you remember from Windows Task Manager, plus the rest of
 the Task Manager layout — sortable processes, performance pages, startup
-apps — in a single Qt app that feels native to KDE / GNOME / any modern
-Linux desktop.
+apps — in a single Qt app. Built and tested on KDE Plasma; should work on
+GNOME and other Qt-capable desktops but the visual fit there is not yet
+verified.
 
 ## Screenshots
 

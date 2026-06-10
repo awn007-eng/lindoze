@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections import deque
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor, QPainter, QPainterPath, QPen, QBrush, QFont
+from PySide6.QtGui import QBrush, QColor, QFont, QLinearGradient, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import QWidget, QSizePolicy
 
 # Win11 Task Manager accent for CPU page is teal; we override per-page.
@@ -78,8 +78,19 @@ class MiniGraph(QWidget):
         r = self.rect()
         p.fillRect(r, BG_COLOR)
 
-        # Border
-        p.setPen(QPen(QColor(255, 255, 255, 30), 1))
+        # Whole-cell accent wash — fades from invisible at the top to a faint
+        # tint at the bottom. Gives idle/flat cells presence even when the
+        # data trace is sitting on the baseline.
+        wash = QLinearGradient(0, r.top(), 0, r.bottom())
+        wash_top = QColor(self.accent); wash_top.setAlpha(0)
+        wash_bot = QColor(self.accent); wash_bot.setAlpha(28)
+        wash.setColorAt(0.0, wash_top)
+        wash.setColorAt(1.0, wash_bot)
+        p.fillRect(r, QBrush(wash))
+
+        # Border — kept softer than default Qt frame so the per-thread grid
+        # at idle reads as "32 quiet cells" rather than "grid of empty boxes."
+        p.setPen(QPen(QColor(255, 255, 255, 18), 1))
         p.drawRect(r.adjusted(0, 0, -1, -1))
 
         # Grid
@@ -117,9 +128,15 @@ class MiniGraph(QWidget):
         path.lineTo(oldest_x + (n_draw - 1) * step, r.bottom())
         path.closeSubpath()
 
-        fill = QColor(self.accent)
-        fill.setAlpha(70)
-        p.fillPath(path, QBrush(fill))
+        # Vertical gradient under the trace: full-strength accent at the top
+        # of the fill, fading to a faint wash at the cell baseline. Idle/flat
+        # traces still look alive instead of a bare line on dark grey.
+        grad = QLinearGradient(0, r.top(), 0, r.bottom())
+        hi = QColor(self.accent); hi.setAlpha(110)
+        lo = QColor(self.accent); lo.setAlpha(18)
+        grad.setColorAt(0.0, hi)
+        grad.setColorAt(1.0, lo)
+        p.fillPath(path, QBrush(grad))
 
         stroke_path = QPainterPath()
         for i, v in enumerate(samples):
@@ -129,7 +146,7 @@ class MiniGraph(QWidget):
                 stroke_path.moveTo(x, y)
             else:
                 stroke_path.lineTo(x, y)
-        p.setPen(QPen(self.accent, 1.4))
+        p.setPen(QPen(self.accent, 1.8))
         p.drawPath(stroke_path)
 
         # Scale markers (top-left = ymax, bottom-left = 0) for big single-graph
