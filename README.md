@@ -16,15 +16,15 @@ verified.
 The Performance tab defaults to the per-thread grid (right-click or toggle
 button to switch to the aggregate view):
 
-![CPU per-thread grid](https://raw.githubusercontent.com/awn007-eng/lindoze/main/docs/screenshots/cpu-grid.png)
+![CPU per-thread grid](https://raw.githubusercontent.com/awn007-eng/lindoze/main/docs/screenshots/cpu-grid.png?v=0.2.5)
 
 Processes tab — sortable tree, search, end-task / kill / suspend / renice:
 
-![Processes tab](https://raw.githubusercontent.com/awn007-eng/lindoze/main/docs/screenshots/processes.png)
+![Processes tab](https://raw.githubusercontent.com/awn007-eng/lindoze/main/docs/screenshots/processes.png?v=0.2.5)
 
 Startup apps tab — toggle XDG autostart entries with a 10-second undo:
 
-![Startup tab](https://raw.githubusercontent.com/awn007-eng/lindoze/main/docs/screenshots/startup.png)
+![Startup tab](https://raw.githubusercontent.com/awn007-eng/lindoze/main/docs/screenshots/startup.png?v=0.2.5)
 
 ## Features (v0.2)
 
