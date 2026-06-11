@@ -10,6 +10,8 @@ the Task Manager layout — sortable processes, performance pages, startup
 apps — in a single Qt app. Built and tested on KDE Plasma and GNOME
 (Fedora Workstation); should work on other Qt-capable desktops too.
 
+See [CHANGELOG.md](CHANGELOG.md) for release history.
+
 ## Screenshots
 
 The Performance tab defaults to the per-thread grid (right-click or toggle

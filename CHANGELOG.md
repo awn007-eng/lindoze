@@ -1,0 +1,102 @@
+# Changelog
+
+All notable changes to Lindoze are documented here.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+## [0.2.6] — 2026-06-10
+
+First release validated on a second desktop environment, plus a CPU-grid layout fix and a steady-state performance trim.
+
+### Added
+- GNOME (Fedora Workstation 44) cross-desktop validation — Processes monospace numerics, Startup icon-theme fallback, and CPU narrow-window reflow all confirmed under Cantarell/Adwaita. Screenshots added under `docs/screenshots/gnome/`.
+
+### Changed
+- README claim updated from "tested on KDE" to "Built and tested on KDE Plasma and GNOME (Fedora Workstation); should work on other Qt-capable desktops too."
+- MiniGraph brushes/pens/fonts are now cached and rebuilt only on resize; ProcessModel caches fonts, alignment, and group-header colors. The Performance page early-returns when it isn't the visible tab, skipping ~40 graph pushes + repaints per tick — roughly a 2–3% steady-state CPU drop on a Ryzen 7945HX.
+
+### Fixed
+- Per-thread CPU cells are capped at 250×200 (aspect ~0.6) so low-core machines on a tall window no longer stretch each sparkline into a skyscraper; the grid now centers on both axes when smaller than the viewport. High-core (32+) layouts are unchanged.
+
+## [0.2.5] — 2026-06-10
+
+UX polish pass driven by an outside review. No new tabs — the existing ones read better at high core counts, at idle, and on first launch.
+
+### Changed
+- **CPU per-thread grid**: reflows columns on resize (narrow window → fewer columns, no clipping); vertical scroll when minimum cell size won't fit; last partial row centered; 100×50 readable cell floor so labels like `CPU 117` don't clip on Threadripper-class systems.
+- **Processes**: numeric columns (PID, CPU %, Memory, Disk, Threads) right-aligned with a monospace font role; group header rows get a faint teal background tint so they read as section dividers.
+- **Startup apps**: icons paint a fallback placeholder immediately and cache resolved themed icons (no empty slots flashing on cold theme caches); friendlier empty-state copy.
+- **Sparklines (every graph)**: whole-cell vertical accent wash so idle traces have presence; trace stroke thickened to 1.8px; softened cell border alpha.
+- **Window/system**: window + taskbar icon resolves via Wayland's `setDesktopFileName` + bundled SVG fallback; toolbar buttons unified through a shared `lindoze/styles.py`.
+
+## [0.2.4] — 2026-06-09
+
+Metadata-only release fixing the PyPI listing.
+
+### Fixed
+- README uses absolute GitHub raw URLs for screenshots so images render on pypi.org.
+- `[project.urls]` expanded with `Repository` and `Bug Tracker` for PyPI's sidebar links.
+
+## [0.2.3] — 2026-06-09
+
+Tooling release — no user-visible app changes, but much more installable and shippable.
+
+### Added
+- `bootstrap.sh` self-installs the `.desktop` start-menu entry and bundled SVG icon into per-user XDG locations (idempotent). `packaging/lindoze.desktop` uses an `@EXEC_PATH@` substitution token.
+- GitHub Actions CI: pytest matrix on Python 3.10/3.11/3.12 + ruff lint (`select=["F"]`) on every push and PR.
+- Trusted Publishing workflow auto-publishes future releases to PyPI on `v*` tag push via OIDC — no long-lived tokens, with a manual-approval gate on the `pypi` environment.
+
+## [0.2.2] — 2026-06-09
+
+Two polish features for Processes and Performance — and Lindoze landed on PyPI.
+
+### Added
+- **Processes**: search needle bolded in accent teal in the Name/PID columns; a "N matches" counter that refreshes on each snapshot.
+- **Performance**: 60s / 10min / 1hr time-scale toolbar applied globally to detail-page graphs (sidebar mini-graphs stay at 60s); selection persists across launches.
+- Published to PyPI: `pipx install lindoze`.
+
+### Changed
+- Graphs render right-anchored (newest sample at the right edge) instead of starting from a misleading flat-zero baseline.
+
+## [0.2.1] — 2026-06-09
+
+### Added
+- Window size/position, last-viewed tab, and Processes column widths + sort order now persist between launches via `QSettings` (`~/.config/Lindoze/Lindoze Process Manager.conf`).
+
+## [0.2.0] — 2026-06-08
+
+Polishes the experimental Intel GPU support and adds a debug flag so Intel users can file actionable reports.
+
+### Added
+- **Intel GPU `--dump-gpu` flag** — prints raw PMU file descriptors, counter values, sysfs paths, and event configs to stderr for bug reports.
+- PMU parser unit tests (15 tests with synthetic counter fixtures, no real hardware needed).
+
+### Fixed
+- Intel frequency sysfs fallback — older Gen7 (Ivy Bridge HD 4000-era) places `gt_cur_freq_mhz` directly under `cardN/`, not `cardN/device/`; both paths are tried now.
+
+### Known limitations
+- Ivy Bridge (Gen7): detection + freq work, but PMU util may report 0 (awaiting a `--dump-gpu` report).
+- `xe` driver: temp/freq only. Old AMD `radeon` driver: no `gpu_busy_percent` sysfs → not detected (use `amdgpu`).
+
+## [0.1.0] — 2026-06-06
+
+First public release — a Linux system monitor laid out like Windows 11 Task Manager.
+
+### Added
+- **Per-thread CPU grid** — every logical processor as its own mini-graph.
+- **Multi-GPU support** — NVIDIA (NVML) and AMD (sysfs), one page per detected device.
+- **Processes tab** — sortable tree, search, end-task / kill / suspend / renice.
+- **Startup apps tab** — one-click toggle with 10-second undo.
+
+[Unreleased]: https://github.com/awn007-eng/lindoze/compare/v0.2.6...HEAD
+[0.2.6]: https://github.com/awn007-eng/lindoze/releases/tag/v0.2.6
+[0.2.5]: https://github.com/awn007-eng/lindoze/releases/tag/v0.2.5
+[0.2.4]: https://github.com/awn007-eng/lindoze/releases/tag/v0.2.4
+[0.2.3]: https://github.com/awn007-eng/lindoze/releases/tag/v0.2.3
+[0.2.2]: https://github.com/awn007-eng/lindoze/releases/tag/v0.2.2
+[0.2.1]: https://github.com/awn007-eng/lindoze/releases/tag/v0.2.1
+[0.2.0]: https://github.com/awn007-eng/lindoze/releases/tag/v0.2.0
+[0.1.0]: https://github.com/awn007-eng/lindoze/releases/tag/v0.1.0
