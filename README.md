@@ -73,6 +73,20 @@ git: `pipx install git+https://github.com/awn007-eng/lindoze.git`.
 (`pipx` itself: `sudo apt install pipx` on Ubuntu/Debian, `sudo dnf install pipx`
 on Fedora/Nobara, `sudo pacman -S python-pipx` on Arch.)
 
+### Fedora / Nobara (Copr)
+
+On Fedora-family distros you can install Lindoze as a proper RPM — it pulls
+Qt6/PySide6 from the system repos and adds the Start-menu entry and icon for
+you:
+
+```bash
+sudo dnf copr enable awn007/lindoze
+sudo dnf install lindoze
+```
+
+Built for Fedora 42/43/44 and rawhide. Update with `sudo dnf upgrade lindoze`;
+remove with `sudo dnf remove lindoze`.
+
 ### From source (for hacking / customization)
 
 ```bash
