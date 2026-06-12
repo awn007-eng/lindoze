@@ -60,7 +60,7 @@ desktop-file-validate %{buildroot}%{_datadir}/applications/%{name}.desktop
 %{_datadir}/icons/hicolor/scalable/apps/%{name}.svg
 
 %changelog
-* Thu Jun 12 2026 Aaron <awn007@gmail.com> - 0.3.0-1
+* Fri Jun 12 2026 Aaron <awn007@gmail.com> - 0.3.0-1
 - Graph readability: per-core CPU clock speeds on the grid, inline value
   readouts and axis scale labels on every graph, combined dual-trace Disk and
   Network graphs, and rose-tinted CPU grid labels.
