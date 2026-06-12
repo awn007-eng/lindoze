@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-06-12
+
+Graph readability pass: the sparklines now carry the numbers that give them meaning — per-core clocks, live values, and real axis scales — rendered inside Lindoze's existing dark cards.
+
+### Added
+- **Per-core clock speed** on each logical-processor cell in the CPU grid (top-right), next to its utilization trace. The data was already sampled via `psutil.cpu_freq(percpu=True)`; it's now shown per core instead of only as the min/max/avg in the stats block.
+- **Inline current-value readout** painted on every graph, color-coded to the page accent — read CPU %, memory %, GPU %, or live throughput at a glance without dropping to the stats grid.
+- **Axis scale labels**: autoscaling throughput graphs (Disk, Network) show their live ceiling with units (e.g. `247 MB/s`) instead of bare gridlines.
+
+### Changed
+- **Disk** and **Network** each render their two directions (Read+Write / Receive+Send) as a **single combined graph** with two color-coded traces sharing one y-axis and a legend, replacing the previous side-by-side pair of boxes — direct comparison at a glance.
+- **GPU** Utilization and VRAM graphs gained the same real scale + value labels, replacing a hand-built label string.
+- **CPU grid** cell labels (`CPU N` + clock) are tinted rose to complement the teal traces; the live utilization `%` stays teal.
+
 ## [0.2.6] — 2026-06-10
 
 First release validated on a second desktop environment, plus a CPU-grid layout fix and a steady-state performance trim.

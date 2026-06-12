@@ -1,5 +1,5 @@
 Name:           lindoze
-Version:        0.2.6
+Version:        0.3.0
 Release:        1%{?dist}
 Summary:        Linux system monitor with the layout of Windows 11 Task Manager
 
@@ -60,5 +60,10 @@ desktop-file-validate %{buildroot}%{_datadir}/applications/%{name}.desktop
 %{_datadir}/icons/hicolor/scalable/apps/%{name}.svg
 
 %changelog
+* Thu Jun 12 2026 Aaron <awn007@gmail.com> - 0.3.0-1
+- Graph readability: per-core CPU clock speeds on the grid, inline value
+  readouts and axis scale labels on every graph, combined dual-trace Disk and
+  Network graphs, and rose-tinted CPU grid labels.
+
 * Wed Jun 10 2026 Aaron <awn007@gmail.com> - 0.2.6-1
 - Initial Copr packaging: CPU grid aspect cap + GNOME validation release.
