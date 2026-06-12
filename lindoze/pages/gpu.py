@@ -25,8 +25,14 @@ class GPUPage(QWidget):
         self._name.setStyleSheet("color: #aaa;")
         self._name.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
 
-        self._util_g = MiniGraph(y_max=100.0, accent=GPU_ACCENT, label="Utilization   100%", max_history=3600)
-        self._vram_g = MiniGraph(y_max=100.0, accent=GPU_ACCENT, label="VRAM   100%", max_history=3600)
+        self._util_g = MiniGraph(
+            y_max=100.0, accent=GPU_ACCENT, label="Utilization",
+            show_scale=True, show_value=True, max_history=3600,
+        )
+        self._vram_g = MiniGraph(
+            y_max=100.0, accent=GPU_ACCENT, label="VRAM",
+            show_scale=True, show_value=True, max_history=3600,
+        )
 
         stats = QWidget()
         sg = QGridLayout(stats)

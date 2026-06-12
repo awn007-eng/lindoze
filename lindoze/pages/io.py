@@ -5,8 +5,14 @@ from PySide6.QtWidgets import QGridLayout, QHBoxLayout, QLabel, QVBoxLayout, QWi
 
 from ..graphs import MiniGraph
 
-DISK_ACCENT = QColor("#4caf50")
-NET_ACCENT = QColor("#e0c947")
+DISK_ACCENT = QColor("#4caf50")   # green — Read / Receive primary
+NET_ACCENT = QColor("#e0c947")    # gold
+
+# Second-series tones for the dual overlay. Kept in-family with the page accent
+# but lighter/shifted so the two traces are distinguishable. Tuning knobs — adjust
+# if the overlay reads muddy on the live graph.
+DISK_ACCENT2 = QColor("#a5d66a")  # lime — Write
+NET_ACCENT2 = QColor("#e0934a")   # amber — Send
 
 
 def _bps(n: float) -> str:
@@ -23,8 +29,12 @@ class DiskPage(QWidget):
         self.device = device
         title = QLabel(f"Disk — {device}")
         f = QFont(); f.setPointSize(20); f.setBold(True); title.setFont(f)
-        self._read = MiniGraph(y_max=None, accent=DISK_ACCENT, label="Read", max_history=3600)
-        self._write = MiniGraph(y_max=None, accent=DISK_ACCENT, label="Write", max_history=3600)
+        # One box, two traces (Read + Write) sharing a y-axis, sysmon-style.
+        self._graph = MiniGraph(
+            y_max=None, accent=DISK_ACCENT, accent2=DISK_ACCENT2,
+            label="Read", label2="Write",
+            show_value=True, show_scale=True, value_fmt=_bps, max_history=3600,
+        )
 
         stats = QWidget(); sg = QGridLayout(stats)
         self._lr = self._stat(sg, 0, 0, "Read speed")
@@ -36,8 +46,7 @@ class DiskPage(QWidget):
         root = QVBoxLayout(self)
         top = QHBoxLayout(); top.addWidget(title); top.addStretch()
         root.addLayout(top)
-        gh = QHBoxLayout(); gh.addWidget(self._read); gh.addWidget(self._write)
-        root.addLayout(gh, stretch=3)
+        root.addWidget(self._graph, stretch=3)
         root.addWidget(stats, stretch=1)
 
     @staticmethod
@@ -53,7 +62,7 @@ class DiskPage(QWidget):
     def on_sample(self, s) -> None:
         r = s.disk_read_bps.get(self.device, 0.0)
         w = s.disk_write_bps.get(self.device, 0.0)
-        self._read.push(r); self._write.push(w)
+        self._graph.push(r); self._graph.push2(w)
         self._lr[1].setText(_bps(r)); self._lw[1].setText(_bps(w))
         self._peak_r = max(self._peak_r, r); self._peak_w = max(self._peak_w, w)
         self._pr[1].setText(_bps(self._peak_r)); self._pw[1].setText(_bps(self._peak_w))
@@ -65,8 +74,12 @@ class NetPage(QWidget):
         self.iface = iface
         title = QLabel(f"Network — {iface}")
         f = QFont(); f.setPointSize(20); f.setBold(True); title.setFont(f)
-        self._rx = MiniGraph(y_max=None, accent=NET_ACCENT, label="Receive", max_history=3600)
-        self._tx = MiniGraph(y_max=None, accent=NET_ACCENT, label="Send", max_history=3600)
+        # One box, two traces (Receive + Send) sharing a y-axis, sysmon-style.
+        self._graph = MiniGraph(
+            y_max=None, accent=NET_ACCENT, accent2=NET_ACCENT2,
+            label="Receive", label2="Send",
+            show_value=True, show_scale=True, value_fmt=_bps, max_history=3600,
+        )
 
         stats = QWidget(); sg = QGridLayout(stats)
         self._lrx = self._stat(sg, 0, 0, "Receive")
@@ -78,8 +91,7 @@ class NetPage(QWidget):
         root = QVBoxLayout(self)
         top = QHBoxLayout(); top.addWidget(title); top.addStretch()
         root.addLayout(top)
-        gh = QHBoxLayout(); gh.addWidget(self._rx); gh.addWidget(self._tx)
-        root.addLayout(gh, stretch=3)
+        root.addWidget(self._graph, stretch=3)
         root.addWidget(stats, stretch=1)
 
     @staticmethod
@@ -95,7 +107,7 @@ class NetPage(QWidget):
     def on_sample(self, s) -> None:
         rx = s.net_rx_bps.get(self.iface, 0.0)
         tx = s.net_tx_bps.get(self.iface, 0.0)
-        self._rx.push(rx); self._tx.push(tx)
+        self._graph.push(rx); self._graph.push2(tx)
         self._lrx[1].setText(_bps(rx)); self._ltx[1].setText(_bps(tx))
         self._peak_rx = max(self._peak_rx, rx); self._peak_tx = max(self._peak_tx, tx)
         self._prx[1].setText(_bps(self._peak_rx)); self._ptx[1].setText(_bps(self._peak_tx))

@@ -21,6 +21,10 @@ from ..sampler import cpu_model
 from ..styles import BUTTON_QSS
 
 CPU_ACCENT = QColor("#17a2b8")  # Win11 teal-cyan
+# Rose/puce label tint for the per-core grid cells (CPU N + MHz). Complements
+# the teal traces and nods to the Konsole palette; the live "%" value stays teal.
+CELL_LABEL_ROSE = QColor("#c97ab8")
+CELL_SUBLABEL_ROSE = QColor("#b066a0")
 
 
 def _fmt_uptime(secs: float) -> str:
@@ -62,7 +66,9 @@ class CPUPage(QWidget):
         self._stack = QStackedWidget()
 
         # --- Aggregate view
-        self._agg = MiniGraph(y_max=100.0, accent=CPU_ACCENT, show_scale=True, max_history=3600)
+        self._agg = MiniGraph(
+            y_max=100.0, accent=CPU_ACCENT, show_scale=True, show_value=True, max_history=3600
+        )
         self._stack.addWidget(self._agg)
 
         # --- Per-thread grid. Cells have a readable floor (100x50) and a cap
@@ -85,7 +91,11 @@ class CPUPage(QWidget):
         self._grid_layout.setSizeConstraint(QGridLayout.SetMinAndMaxSize)
         self._cells: list[MiniGraph] = []
         for i in range(n_threads):
-            mg = MiniGraph(y_max=100.0, accent=CPU_ACCENT, compact=True, label=f"CPU {i}", max_history=3600)
+            mg = MiniGraph(
+                y_max=100.0, accent=CPU_ACCENT, compact=True, label=f"CPU {i}",
+                show_value=True, label_color=CELL_LABEL_ROSE,
+                sublabel_color=CELL_SUBLABEL_ROSE, max_history=3600,
+            )
             mg.setFixedSize(self._grid_cell_min_w, self._grid_cell_min_h)
             self._cells.append(mg)
 
@@ -260,8 +270,13 @@ class CPUPage(QWidget):
             import psutil
             self._boot = psutil.boot_time()
         self._agg.push(s.cpu_total)
+        freq_per = s.cpu_freq_per
         for i, v in enumerate(s.cpu_per[: self._n]):
             self._cells[i].push(v)
+            # Per-core MHz sits top-right on each cell. Guard for short/empty
+            # freq lists (some kernels report a single shared value or none).
+            if i < len(freq_per):
+                self._cells[i].set_sublabel(f"{freq_per[i] / 1000:.2f} GHz")
         self._lbl_util[1].setText(f"{s.cpu_total:.0f}%")
         if s.cpu_freq_per:
             avg_ghz = sum(s.cpu_freq_per) / len(s.cpu_freq_per) / 1000.0
