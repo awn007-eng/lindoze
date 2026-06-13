@@ -17,7 +17,17 @@ See [CHANGELOG.md](CHANGELOG.md) for release history.
 The Performance tab defaults to the per-thread grid (right-click or toggle
 button to switch to the aggregate view):
 
-![CPU per-thread grid](https://raw.githubusercontent.com/awn007-eng/lindoze/main/docs/screenshots/cpu-grid.png?v=0.2.5)
+![CPU per-thread grid](https://raw.githubusercontent.com/awn007-eng/lindoze/main/docs/screenshots/cpu-grid.png?v=0.3.0)
+
+Each cell shows its core's live clock speed and current load, so the grid reads
+at a glance instead of being 32 anonymous sparklines.
+
+Disk and Network each draw both directions as one combined graph — two
+color-coded traces sharing an axis, with live values and a real scale label:
+
+![Disk read/write graph](https://raw.githubusercontent.com/awn007-eng/lindoze/main/docs/screenshots/disk.png?v=0.3.0)
+
+![Network receive/send graph](https://raw.githubusercontent.com/awn007-eng/lindoze/main/docs/screenshots/net.png?v=0.3.0)
 
 Processes tab — sortable tree, search, end-task / kill / suspend / renice:
 
@@ -27,7 +37,7 @@ Startup apps tab — toggle XDG autostart entries with a 10-second undo:
 
 ![Startup tab](https://raw.githubusercontent.com/awn007-eng/lindoze/main/docs/screenshots/startup.png?v=0.2.5)
 
-## Features (v0.2)
+## Features (v0.3)
 
 - **Performance tab** with per-resource sub-navigation
   - **CPU** — aggregate + per-logical-processor grid (auto-sized; handles 2 to 128+ threads)
