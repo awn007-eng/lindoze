@@ -14,11 +14,12 @@ See [CHANGELOG.md](CHANGELOG.md) for release history.
 
 ## How this was built
 
-Lindoze was built with significant help from an AI coding assistant (Claude
-Code). I designed it, made the decisions, and reviewed and tested all of it.
-Per Fedora's [AI-assisted contribution policy](https://docs.fedoraproject.org/en-US/council/policy/ai-contribution-policy/),
+I built Lindoze: the design, the layout, and every decision about how it works
+are mine, and I've personally reviewed and tested all of it across KDE, GNOME,
+and older hardware. I used an AI coding assistant (Claude Code) to help write
+it, and per Fedora's [AI-assisted contribution policy](https://docs.fedoraproject.org/en-US/council/policy/ai-contribution-policy/)
 I'm fully accountable for every line. It's GPL-3 and the complete source is
-here to read and audit.
+right here to read and audit — you don't have to take my word for any of it.
 
 ## Screenshots
 
