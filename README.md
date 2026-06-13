@@ -12,6 +12,14 @@ apps — in a single Qt app. Built and tested on KDE Plasma and GNOME
 
 See [CHANGELOG.md](CHANGELOG.md) for release history.
 
+## How this was built
+
+Lindoze was built with significant help from an AI coding assistant (Claude
+Code). I designed it, made the decisions, and reviewed and tested all of it.
+Per Fedora's [AI-assisted contribution policy](https://docs.fedoraproject.org/en-US/council/policy/ai-contribution-policy/),
+I'm fully accountable for every line. It's GPL-3 and the complete source is
+here to read and audit.
+
 ## Screenshots
 
 The Performance tab defaults to the per-thread grid (right-click or toggle
