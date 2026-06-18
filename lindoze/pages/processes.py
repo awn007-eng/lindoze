@@ -397,6 +397,11 @@ class ProcessesPage(QWidget):
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
 
+        # Set by the window; lets us tell the sampler when the costly exe/cmdline
+        # reads are actually needed (Path/Command-line column shown or searching).
+        self._sampler = None
+        self._detail_needed = False
+
         toolbar = QHBoxLayout()
         self._search = QLineEdit()
         self._search.setPlaceholderText("Search (name, path, command line, or PID)")
@@ -493,9 +498,13 @@ class ProcessesPage(QWidget):
             if i == 0:
                 act.setEnabled(False)
             act.toggled.connect(
-                lambda checked, col=i: self.tree.setColumnHidden(col, not checked)
+                lambda checked, col=i: self._toggle_column(col, checked)
             )
         return menu
+
+    def _toggle_column(self, col: int, visible: bool) -> None:
+        self.tree.setColumnHidden(col, not visible)
+        self._update_detail_needed()
 
     def _on_columns_button(self) -> None:
         # Reliable, discoverable entry point — drops the menu under the button.
@@ -544,11 +553,31 @@ class ProcessesPage(QWidget):
         self._settings.setValue("processes/compact", self._compact)
         self._apply_density()
 
+    # ---- Detail gating (exe/cmdline are only read when shown or searched)
+    def set_sampler(self, sampler) -> None:
+        self._sampler = sampler
+        self._update_detail_needed()
+
+    def _update_detail_needed(self) -> None:
+        if self._sampler is None:
+            return
+        needed = (not self.tree.isColumnHidden(8)
+                  or not self.tree.isColumnHidden(9)
+                  or bool(self._search.text().strip()))
+        was = self._detail_needed
+        self._detail_needed = needed
+        self._sampler.set_detail_needed(needed)
+        # Going from off->on: backfill exe/cmdline now so the column/search
+        # populates immediately instead of after the next tick.
+        if needed and not was:
+            self._sampler.refresh_now()
+
     # ---- Search
     def _on_search_changed(self, text: str) -> None:
         self._proxy.set_needle(text)
         self._highlight.set_needle(text)
         self.tree.viewport().update()
+        self._update_detail_needed()
         if not text.strip():
             self._match_label.setText("")
             return

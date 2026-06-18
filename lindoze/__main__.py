@@ -39,11 +39,14 @@ def main() -> int:
     # Icon= entry. Without this the taskbar shows a generic fallback.
     app.setDesktopFileName("lindoze")
 
-    # Window-icon fallback: prefer the installed hicolor icon, fall back to
-    # the bundled SVG so dev launches (no install step) still get a real icon.
+    # Window-icon fallback: prefer an installed themed icon (user, then
+    # system), then the SVG bundled inside the package. The packaged copy is
+    # what saves pipx installs, which drop no .desktop and no hicolor icon —
+    # without it the window/taskbar shows a generic placeholder.
     for candidate in (
         Path.home() / ".local/share/icons/hicolor/scalable/apps/lindoze.svg",
-        Path(__file__).resolve().parent.parent / "assets" / "lindoze.svg",
+        Path("/usr/share/icons/hicolor/scalable/apps/lindoze.svg"),
+        Path(__file__).resolve().parent / "lindoze.svg",
     ):
         if candidate.exists():
             app.setWindowIcon(QIcon(str(candidate)))

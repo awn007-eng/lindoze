@@ -43,6 +43,11 @@ lindoze = "lindoze.__main__:main"
 include = ["lindoze*"]
 exclude = ["tests*"]
 
+[tool.setuptools.package-data]
+# Bundle the icon inside the wheel so every install (pipx, source, Copr) has a
+# window-icon fallback even when no .desktop file is installed (e.g. pipx).
+lindoze = ["*.svg"]
+
 [tool.ruff]
 line-length = 100
 target-version = "py310"

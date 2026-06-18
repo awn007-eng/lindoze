@@ -27,9 +27,14 @@ class ProcSnap:
     threads: int
 
 
+# Fetched every tick — dynamic values plus the cheap fields that all come from
+# a single /proc/<pid>/stat read. exe, username, and cmdline are deliberately
+# absent: they're immutable per process and the priciest to read (separate
+# /proc files + uid->name lookup), so they're cached per-PID and read lazily
+# (see _static / _need_detail) rather than re-read for every process each tick.
 _ATTRS = [
-    "pid", "ppid", "name", "exe", "username", "memory_info",
-    "num_threads", "status", "cmdline", "io_counters",
+    "pid", "ppid", "name", "memory_info",
+    "num_threads", "status", "io_counters",
 ]
 
 
@@ -48,9 +53,49 @@ class ProcessSampler(QObject):
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 pass
         self._prev_io: dict[int, tuple[int, int, float]] = {}
+        # pid -> [username, exe|None, cmdline|None]. None means "not fetched
+        # yet"; populated lazily once we've seen the PID (and, for exe/cmdline,
+        # once the UI needs them). Pruned as PIDs exit.
+        self._static: dict[int, list] = {}
+        self._need_detail = False
 
     def start(self) -> None:
         self._timer.start()
+
+    def set_detail_needed(self, needed: bool) -> None:
+        """Gate the expensive exe/cmdline reads. The Processes page calls this
+        when the Path/Command-line column is shown or a search is active."""
+        self._need_detail = needed
+
+    def refresh_now(self) -> None:
+        """Sample immediately (only while actively sampling) so newly-enabled
+        detail columns or searches populate without waiting for the next tick."""
+        if self._timer.isActive():
+            self._tick()
+
+    @staticmethod
+    def _read_username(p) -> str:
+        try:
+            u = p.username()
+        except (psutil.Error, OSError):
+            return "?"
+        return u if isinstance(u, str) else "?"
+
+    @staticmethod
+    def _read_exe(p) -> str:
+        try:
+            exe = p.exe()
+        except (psutil.Error, OSError):
+            return ""
+        return exe if isinstance(exe, str) else ""
+
+    @staticmethod
+    def _read_cmdline(p, name) -> str:
+        try:
+            cmd = p.cmdline()
+        except (psutil.Error, OSError):
+            cmd = None
+        return " ".join(cmd) if cmd else (name or "")
 
     def set_active(self, active: bool) -> None:
         """Pause sampling when the Processes tab isn't visible — there's no
@@ -92,15 +137,22 @@ class ProcessSampler(QObject):
 
                 mem = info.get("memory_info")
                 rss = mem.rss if mem and hasattr(mem, "rss") else 0
-                cmd = info.get("cmdline") or []
-                cmdline = " ".join(cmd) if cmd else (info.get("name") or "")
-                # process_iter stores the exception object as the value on
-                # AccessDenied — keep only real string paths.
-                exe = info.get("exe")
-                exe = exe if isinstance(exe, str) else ""
-                username = info.get("username") or "?"
-                if not isinstance(username, str):  # AccessDenied marker
-                    username = "?"
+
+                pid = info["pid"]
+                entry = self._static.get(pid)
+                if entry is None:
+                    # First sighting of this PID: read the immutable username
+                    # once. exe/cmdline stay deferred until something needs them.
+                    entry = [self._read_username(p), None, None]
+                    self._static[pid] = entry
+                # exe + command line never change but are the priciest reads, so
+                # fetch them only when the UI needs them, then cache for good.
+                if self._need_detail and entry[1] is None:
+                    entry[1] = self._read_exe(p)
+                    entry[2] = self._read_cmdline(p, info.get("name"))
+                username = entry[0]
+                exe = entry[1] or ""
+                cmdline = entry[2] or ""
 
                 snaps[info["pid"]] = ProcSnap(
                     pid=info["pid"],
@@ -119,4 +171,9 @@ class ProcessSampler(QObject):
                 continue
 
         self._prev_io = new_io
+        # Drop cache entries for exited PIDs so the dict tracks the live set
+        # (and to limit staleness if the kernel reuses a PID number).
+        if len(self._static) > len(snaps):
+            for dead in self._static.keys() - snaps.keys():
+                del self._static[dead]
         self.snapshot_ready.emit(snaps)

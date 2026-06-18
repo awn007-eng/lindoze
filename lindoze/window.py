@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from PySide6.QtCore import QByteArray, QSettings, QSize
-from PySide6.QtGui import QFont
+from PySide6.QtCore import QByteArray, QSettings, QSize, Qt
+from PySide6.QtGui import QAction, QFont, QGuiApplication
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QListWidget,
@@ -69,6 +69,13 @@ QMenu::indicator:checked {
     background: #17a2b8;
     border: 1px solid #17a2b8;
 }
+/* Menu bar: the generic QWidget color above applies even to disabled items,
+   so style the disabled state explicitly or a greyed-out menu still looks
+   clickable. */
+QMenuBar { background: #1f1f1f; color: #e6e6e6; }
+QMenuBar::item { padding: 4px 10px; background: transparent; }
+QMenuBar::item:selected { background: #2d4a5a; }
+QMenuBar::item:disabled { color: #5a5a5a; }
 """
 
 
@@ -86,6 +93,18 @@ class MainWindow(QMainWindow):
         geom = self._settings.value("window/geometry")
         if isinstance(geom, QByteArray) and not geom.isEmpty():
             self.restoreGeometry(geom)
+
+        # "Always on top": the portable Qt flag works on X11 but Wayland
+        # compositors (KWin/Mutter) don't let a client set its own stacking, so
+        # the menu item is disabled there with an explanation rather than
+        # silently doing nothing. Apply the persisted flag before the first
+        # show() so it takes effect without a disruptive re-show.
+        self._is_wayland = QGuiApplication.platformName().startswith("wayland")
+        aot = (self._settings.value("window/always_on_top", False, type=bool)
+               and not self._is_wayland)
+        if aot:
+            self.setWindowFlag(Qt.WindowStaysOnTopHint, True)
+        self._build_menubar(aot)
 
         self.outer_sidebar = QListWidget()
         self.outer_sidebar.setFixedWidth(150)
@@ -135,6 +154,37 @@ class MainWindow(QMainWindow):
         header_state = self._settings.value("processes/header_state")
         if isinstance(header_state, QByteArray) and not header_state.isEmpty():
             self.processes_page.tree.header().restoreState(header_state)
+
+        # Hand the page its sampler so it can gate the expensive exe/cmdline
+        # reads on whether the Path/Command-line columns or search need them.
+        # Done after restoreState so the initial column-visibility is final.
+        self.processes_page.set_sampler(self.process_sampler)
+
+    def _build_menubar(self, always_on_top: bool) -> None:
+        view = self.menuBar().addMenu("View")
+        view.setToolTipsVisible(True)
+        act = QAction("Always on Top", self)
+        act.setCheckable(True)
+        act.setChecked(always_on_top)  # set before connecting — no signal fires
+        act.toggled.connect(self._toggle_always_on_top)
+        view.addAction(act)
+        self._aot_action = act
+        if self._is_wayland:
+            # Always on Top is the only View item and Wayland can't honor it
+            # (KWin/Mutter ignore client stacking), so grey the whole menu —
+            # visible for layout consistency, but it won't open to a dead entry.
+            view.menuAction().setEnabled(False)
+            view.menuAction().setToolTip(
+                "Always on Top isn't available under Wayland.\n"
+                "Use KWin: title-bar → More Actions → Keep Above."
+            )
+
+    def _toggle_always_on_top(self, checked: bool) -> None:
+        self.setWindowFlag(Qt.WindowStaysOnTopHint, checked)
+        self._settings.setValue("window/always_on_top", checked)
+        # Toggling a window flag hides the window on most platforms; re-show so
+        # it stays visible.
+        self.show()
 
     def _on_tab_changed(self, row: int) -> None:
         # Row 0 = Processes, Row 1 = Performance.
