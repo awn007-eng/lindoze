@@ -7,6 +7,7 @@ behavior closer than a strict PPID tree does.
 """
 from __future__ import annotations
 
+import datetime
 import html as _html
 import os
 import signal
@@ -393,12 +394,16 @@ class ProcessesPage(QWidget):
         )
         self._match_label = QLabel("")
         self._match_label.setStyleSheet("QLabel { color: #888; padding: 0 8px; }")
+        self._cols_btn = QPushButton("Columns ▾")
+        self._cols_btn.setStyleSheet(BUTTON_QSS + " QPushButton { padding: 4px 14px; }")
+        self._cols_btn.clicked.connect(self._on_columns_button)
         self._end_btn = QPushButton("End task")
         self._end_btn.setStyleSheet(BUTTON_QSS + " QPushButton { padding: 4px 14px; }")
         self._end_btn.setEnabled(False)
         self._end_btn.clicked.connect(self._end_task_selected)
         toolbar.addWidget(self._search, stretch=1)
         toolbar.addWidget(self._match_label)
+        toolbar.addWidget(self._cols_btn)
         toolbar.addWidget(self._end_btn)
 
         self._model = ProcessModel(self)
@@ -461,7 +466,7 @@ class ProcessesPage(QWidget):
             self._on_search_changed(self._search.text())
 
     # ---- Header column show/hide
-    def _on_header_menu(self, pos) -> None:
+    def _columns_menu(self) -> QMenu:
         menu = QMenu(self)
         for i, (label, _) in enumerate(COLS):
             act = menu.addAction(label)
@@ -473,7 +478,17 @@ class ProcessesPage(QWidget):
             act.toggled.connect(
                 lambda checked, col=i: self.tree.setColumnHidden(col, not checked)
             )
-        menu.exec(self.tree.header().mapToGlobal(pos))
+        return menu
+
+    def _on_columns_button(self) -> None:
+        # Reliable, discoverable entry point — drops the menu under the button.
+        btn = self._cols_btn
+        self._columns_menu().exec(btn.mapToGlobal(btn.rect().bottomLeft()))
+
+    def _on_header_menu(self, pos) -> None:
+        # Bonus right-click affordance; on some sessions the header doesn't
+        # emit this, which is why the toolbar button above is the primary path.
+        self._columns_menu().exec(self.tree.header().mapToGlobal(pos))
 
     # ---- Search
     def _on_search_changed(self, text: str) -> None:
@@ -585,21 +600,40 @@ class ProcessesPage(QWidget):
     def _properties(self, pid: int) -> None:
         try:
             p = psutil.Process(pid)
-            text = (
-                f"PID: {p.pid}\n"
-                f"Name: {p.name()}\n"
-                f"Executable: {p.exe() or '?'}\n"
-                f"Working dir: {p.cwd() if p.is_running() else '?'}\n"
-                f"Command line: {' '.join(p.cmdline()) or p.name()}\n"
-                f"User: {p.username()}\n"
-                f"PPID: {p.ppid()}\n"
-                f"Started: {__import__('datetime').datetime.fromtimestamp(p.create_time())}\n"
-                f"Threads: {p.num_threads()}\n"
-                f"Open files: {len(p.open_files()) if p.is_running() else '?'}\n"
-                f"Status: {p.status()}"
-            )
         except psutil.Error as e:
-            text = f"Error reading process: {e}"
+            QMessageBox.information(
+                self, f"Properties — PID {pid}", f"Cannot open process: {e}"
+            )
+            return
+
+        # Read each field independently so one restricted attribute (common for
+        # system helpers like (sd-pam)) doesn't sink the whole dialog.
+        def field(fn) -> str:
+            try:
+                return str(fn())
+            except psutil.AccessDenied:
+                return "(restricted)"
+            except psutil.NoSuchProcess:
+                return "(no longer running)"
+            except (psutil.Error, OSError, ValueError):
+                return "?"
+
+        rows = [
+            ("PID", str(pid)),
+            ("Name", field(p.name)),
+            ("Executable", field(p.exe) or "?"),
+            ("Working dir", field(p.cwd)),
+            ("Command line", field(lambda: " ".join(p.cmdline()))),
+            ("User", field(p.username)),
+            ("PPID", field(p.ppid)),
+            ("Started", field(
+                lambda: datetime.datetime.fromtimestamp(
+                    p.create_time()).strftime("%Y-%m-%d %H:%M:%S"))),
+            ("Threads", field(p.num_threads)),
+            ("Open files", field(lambda: len(p.open_files()))),
+            ("Status", field(p.status)),
+        ]
+        text = "\n".join(f"{k}: {v}" for k, v in rows)
         QMessageBox.information(self, f"Properties — PID {pid}", text)
 
     def _end_task_selected(self) -> None:
