@@ -1,5 +1,5 @@
 Name:           lindoze
-Version:        0.4.0
+Version:        0.5.0
 Release:        1%{?dist}
 Summary:        Linux system monitor with the layout of Windows 11 Task Manager
 
@@ -60,6 +60,13 @@ desktop-file-validate %{buildroot}%{_datadir}/applications/%{name}.desktop
 %{_datadir}/icons/hicolor/scalable/apps/%{name}.svg
 
 %changelog
+* Thu Jun 18 2026 Aaron <awn007@gmail.com> - 0.5.0-1
+- Processes: Copy path/PID/command line context-menu entries, a Compact/Standard
+  row-density toggle, and lower CPU (the sampler caches immutable per-process
+  fields and reads exe/cmdline lazily).
+- New View menu with an Always on Top toggle (X11; greyed under Wayland).
+- Window icon bundled in the package so pipx/pip installs get a real icon.
+
 * Thu Jun 18 2026 Aaron <awn007@gmail.com> - 0.4.0-1
 - Processes tab: new Path and Command line columns (full executable path and
   complete command line with all arguments), a Columns button to show/hide

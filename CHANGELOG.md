@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-06-18
+
+Power-user pass driven by forum feedback (tbone26-fed): denser process list, clipboard actions, a leaner sampler, and a window you can pin and shrink into a corner.
+
+### Added
+- **Copy path**, **Copy PID**, and **Copy command line** entries on the process right-click menu (path / command line are disabled when unreadable, e.g. kernel threads).
+- **Compact / Standard row-density toggle** in the Processes toolbar — Compact drops the row font and padding to fit roughly 20 rows where Standard fits ~15, for more processes per screen. Persists across launches.
+- **Always on Top** under a new **View** menu (persisted). Works on X11; under Wayland the compositor controls window stacking, so the menu is greyed with a pointer to your compositor's own "Keep Above".
+- Search now also matches the executable path, alongside name, command line, and PID.
+
+### Changed
+- **Lower CPU on the Processes tab.** The sampler now caches the immutable per-process fields (user, executable path, command line) instead of re-reading them for every process every tick, and reads the path / command line only when the Path/Command-line column is shown or a search is active. The per-tick sampling cost drops ~38%.
+
+### Fixed
+- Menu **check indicators now render** under the dark theme (the column show/hide menu showed no tick before); all menus get consistent dark styling.
+- **Window icon now ships inside the package**, so `pipx`/`pip` installs — which don't install a `.desktop` file or themed icon — get a real window icon instead of a generic placeholder.
+- Lower minimum window size (380×280) for a small corner-of-the-screen monitor.
+
 ## [0.4.0] — 2026-06-18
 
 Process visibility, by request: see exactly which binary and command line each process is running, and pick which columns you want.
@@ -119,7 +137,10 @@ First public release — a Linux system monitor laid out like Windows 11 Task Ma
 - **Processes tab** — sortable tree, search, end-task / kill / suspend / renice.
 - **Startup apps tab** — one-click toggle with 10-second undo.
 
-[Unreleased]: https://github.com/awn007-eng/lindoze/compare/v0.2.6...HEAD
+[Unreleased]: https://github.com/awn007-eng/lindoze/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/awn007-eng/lindoze/releases/tag/v0.5.0
+[0.4.0]: https://github.com/awn007-eng/lindoze/releases/tag/v0.4.0
+[0.3.0]: https://github.com/awn007-eng/lindoze/releases/tag/v0.3.0
 [0.2.6]: https://github.com/awn007-eng/lindoze/releases/tag/v0.2.6
 [0.2.5]: https://github.com/awn007-eng/lindoze/releases/tag/v0.2.5
 [0.2.4]: https://github.com/awn007-eng/lindoze/releases/tag/v0.2.4
