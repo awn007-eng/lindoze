@@ -1,5 +1,5 @@
 Name:           lindoze
-Version:        0.3.0
+Version:        0.4.0
 Release:        1%{?dist}
 Summary:        Linux system monitor with the layout of Windows 11 Task Manager
 
@@ -60,6 +60,12 @@ desktop-file-validate %{buildroot}%{_datadir}/applications/%{name}.desktop
 %{_datadir}/icons/hicolor/scalable/apps/%{name}.svg
 
 %changelog
+* Thu Jun 18 2026 Aaron <awn007@gmail.com> - 0.4.0-1
+- Processes tab: new Path and Command line columns (full executable path and
+  complete command line with all arguments), a Columns button to show/hide
+  columns, and search now matches the path too.
+- Properties dialog degrades gracefully when individual fields are restricted.
+
 * Fri Jun 12 2026 Aaron <awn007@gmail.com> - 0.3.0-1
 - Graph readability: per-core CPU clock speeds on the grid, inline value
   readouts and axis scale labels on every graph, combined dual-trace Disk and

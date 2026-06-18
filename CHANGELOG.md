@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-06-18
+
+Process visibility, by request: see exactly which binary and command line each process is running, and pick which columns you want.
+
 ### Added
 - **Path** and **Command line** columns in the Processes tab — see a process's full executable path and its complete command line (all arguments), so you can tell apart eight instances of the same script launched with different flags. Both are sortable and hidden by default; use the **Columns ▾** button in the toolbar (or right-click the column header) to show or hide any column, and your choice is remembered between launches.
 - The search box now also matches the executable path, alongside the name, command line, and PID it already searched.
