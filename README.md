@@ -46,7 +46,7 @@ Startup apps tab — toggle XDG autostart entries with a 10-second undo:
 
 ![Startup tab](https://raw.githubusercontent.com/awn007-eng/lindoze/main/docs/screenshots/startup.png?v=0.2.5)
 
-## Features (v0.3)
+## Features
 
 - **Performance tab** with per-resource sub-navigation
   - **CPU** — aggregate + per-logical-processor grid (auto-sized; handles 2 to 128+ threads)
@@ -54,10 +54,18 @@ Startup apps tab — toggle XDG autostart entries with a 10-second undo:
   - **GPU** — NVIDIA (via NVML), AMD (via sysfs), Intel (experimental — i915 perf PMU + hwmon); multi-GPU systems show one page per GPU
   - **Disk** — per-physical-device R/W throughput
   - **Network** — per-interface RX/TX throughput
-- **Processes tab** — sortable tree with User / System grouping, search, right-click actions
-  (End task, Kill, Suspend/Resume, Set priority, Open file location, Properties)
+- **Processes tab** — sortable tree with User / System grouping
+  - Search across name, executable path, full command line, and PID
+  - Selectable columns — show/hide the full **executable path** and **command line**
+    (all arguments) from the **Columns** menu; your choice is remembered
+  - **Compact / Standard** row density toggle — fit more processes per screen
+  - Right-click actions: End task, Kill, Suspend/Resume, Set priority,
+    **Copy path / Copy PID / Copy command line**, Open file location, Properties
 - **Startup apps tab** — `~/.config/autostart/*.desktop` entries; one-click toggle with
   10-second undo and automatic `.bak` files
+- **View menu** — **Always on Top** (works on X11; on Wayland the compositor controls
+  stacking, so use its own "Keep Above"). A small minimum window size lets it tuck into
+  a screen corner.
 
 ## Requirements
 
