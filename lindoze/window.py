@@ -45,6 +45,30 @@ QMainWindow, QWidget {
     color: #e6e6e6;
 }
 QLabel { color: #e6e6e6; }
+/* The generic QWidget rule above cascades into QMenu (a QWidget) and
+   suppresses the native check indicator, so style the menu + indicator
+   explicitly — otherwise checkable items (e.g. the Columns menu) show no
+   tick. A filled teal box = checked, hollow outline = unchecked. */
+QMenu {
+    background: #232323;
+    color: #e6e6e6;
+    border: 1px solid #333;
+}
+QMenu::item { padding: 4px 24px 4px 20px; }
+QMenu::item:selected { background: #2d4a5a; }
+QMenu::item:disabled { color: #888; }
+QMenu::separator { height: 1px; background: #333; margin: 4px 0; }
+QMenu::indicator {
+    width: 13px;
+    height: 13px;
+    margin-left: 4px;
+    border: 1px solid #555;
+    border-radius: 2px;
+}
+QMenu::indicator:checked {
+    background: #17a2b8;
+    border: 1px solid #17a2b8;
+}
 """
 
 
@@ -53,6 +77,9 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("Lindoze Process Manager")
         self.resize(1200, 760)
+        # Allow shrinking to a small corner-of-the-screen monitor; internal
+        # views scroll rather than enforcing a large floor.
+        self.setMinimumSize(380, 280)
         self.setStyleSheet(WINDOW_DARK)
 
         self._settings = QSettings()

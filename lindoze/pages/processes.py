@@ -19,6 +19,7 @@ import psutil
 from PySide6.QtCore import (
     QAbstractItemModel,
     QModelIndex,
+    QSettings,
     QSortFilterProxyModel,
     Qt,
 )
@@ -78,14 +79,20 @@ NUMERIC_COLS = {1, 3, 4, 5, 7}
 # Module-level cached fonts/colors. data() is called for every visible cell on
 # every dataChanged emission — allocating fresh QFont / QColor objects per call
 # was a measurable chunk of UI thread time on the Processes tab.
-def _build_role_cache():
+def _make_fonts(point_size: float | None = None):
+    """Build the (mono, mono_bold, bold) role fonts, optionally at an explicit
+    point size. Compact density mode shrinks these so rows get shorter — the
+    numeric columns use their own mono font, so the row only shrinks if these
+    shrink alongside the view font, not the view font alone."""
     mono = QFont("Monospace"); mono.setStyleHint(QFont.Monospace)
     mono_bold = QFont("Monospace"); mono_bold.setStyleHint(QFont.Monospace); mono_bold.setBold(True)
     bold = QFont(); bold.setBold(True)
-    align_right_vcenter = int(Qt.AlignRight | Qt.AlignVCenter)
-    return mono, mono_bold, bold, align_right_vcenter
+    if point_size and point_size > 0:
+        for f in (mono, mono_bold, bold):
+            f.setPointSizeF(point_size)
+    return mono, mono_bold, bold
 
-_FONT_MONO, _FONT_MONO_BOLD, _FONT_BOLD, _ALIGN_RIGHT_VCENTER = _build_role_cache()
+_ALIGN_RIGHT_VCENTER = int(Qt.AlignRight | Qt.AlignVCenter)
 _FG_GROUP = QColor("#9ecaff")
 _BG_GROUP = QColor(23, 162, 184, 32)
 
@@ -124,6 +131,12 @@ class ProcessModel(QAbstractItemModel):
         self._user_grp = Node(pid=-1, snap=None, group="user", parent=self._root)
         self._sys_grp = Node(pid=-1, snap=None, group="system", parent=self._root)
         self._root.children = [self._user_grp, self._sys_grp]
+        self._mono, self._mono_bold, self._bold = _make_fonts()
+
+    def set_point_size(self, point_size: float | None) -> None:
+        """Rebuild the role fonts at a new size (compact density). The view
+        relayout that follows re-queries these via the FontRole."""
+        self._mono, self._mono_bold, self._bold = _make_fonts(point_size)
 
     # ---- QAbstractItemModel
     def rowCount(self, parent=QModelIndex()):
@@ -165,9 +178,9 @@ class ProcessModel(QAbstractItemModel):
             return _ALIGN_RIGHT_VCENTER
         if role == Qt.FontRole:
             if col in NUMERIC_COLS:
-                return _FONT_MONO_BOLD if node.snap is None else _FONT_MONO
+                return self._mono_bold if node.snap is None else self._mono
             if node.snap is None:
-                return _FONT_BOLD
+                return self._bold
         if role == Qt.ForegroundRole and node.snap is None:
             return _FG_GROUP
         if role == Qt.BackgroundRole and node.snap is None:
@@ -397,12 +410,22 @@ class ProcessesPage(QWidget):
         self._cols_btn = QPushButton("Columns ▾")
         self._cols_btn.setStyleSheet(BUTTON_QSS + " QPushButton { padding: 4px 14px; }")
         self._cols_btn.clicked.connect(self._on_columns_button)
+        self._settings = QSettings()
+        self._compact = self._settings.value("processes/compact", False, type=bool)
+        self._base_pt = QApplication.font().pointSizeF()
+        if self._base_pt <= 0:
+            self._base_pt = 10.0
+        self._compact_btn = QPushButton()
+        self._compact_btn.setToolTip("Toggle row density — more processes per screen")
+        self._compact_btn.setStyleSheet(BUTTON_QSS + " QPushButton { padding: 4px 14px; }")
+        self._compact_btn.clicked.connect(self._on_compact_clicked)
         self._end_btn = QPushButton("End task")
         self._end_btn.setStyleSheet(BUTTON_QSS + " QPushButton { padding: 4px 14px; }")
         self._end_btn.setEnabled(False)
         self._end_btn.clicked.connect(self._end_task_selected)
         toolbar.addWidget(self._search, stretch=1)
         toolbar.addWidget(self._match_label)
+        toolbar.addWidget(self._compact_btn)
         toolbar.addWidget(self._cols_btn)
         toolbar.addWidget(self._end_btn)
 
@@ -420,13 +443,7 @@ class ProcessesPage(QWidget):
         self.tree.setExpandsOnDoubleClick(True)
         self.tree.setContextMenuPolicy(Qt.CustomContextMenu)
         self.tree.customContextMenuRequested.connect(self._on_context_menu)
-        self.tree.setStyleSheet(
-            "QTreeView { background: #1a1a1a; alternate-background-color: #1f1f1f; "
-            "color: #ddd; border: none; selection-background-color: #2d4a5a; } "
-            "QTreeView::item { padding: 3px 4px; } "
-            "QHeaderView::section { background: #232323; color: #ccc; "
-            "padding: 6px 8px; border: 0; border-right: 1px solid #2a2a2a; }"
-        )
+        self._apply_density()
         # Column widths
         for i, (_, w) in enumerate(COLS):
             self.tree.setColumnWidth(i, w)
@@ -489,6 +506,43 @@ class ProcessesPage(QWidget):
         # Bonus right-click affordance; on some sessions the header doesn't
         # emit this, which is why the toolbar button above is the primary path.
         self._columns_menu().exec(self.tree.header().mapToGlobal(pos))
+
+    # ---- Row density
+    def _apply_density(self) -> None:
+        # Compact shrinks the row font by 1pt AND drops the vertical padding so
+        # advanced users fit ~20 rows on screen instead of ~15 (tbone's ask).
+        # The font has to shrink in BOTH the view and the model's cached role
+        # fonts — the numeric columns paint with their own mono font, so view
+        # font alone wouldn't move uniformRowHeights' (max) row height.
+        pt = (self._base_pt - 1.0) if self._compact else self._base_pt
+        self._model.set_point_size(pt)
+        view_font = self.tree.font()
+        view_font.setPointSizeF(pt)
+        self.tree.setFont(view_font)
+
+        item_pad = "0px 4px" if self._compact else "3px 4px"
+        self.tree.setStyleSheet(
+            "QTreeView { background: #1a1a1a; alternate-background-color: #1f1f1f; "
+            "color: #ddd; border: none; selection-background-color: #2d4a5a; } "
+            f"QTreeView::item {{ padding: {item_pad}; }} "
+            "QHeaderView::section { background: #232323; color: #ccc; "
+            "padding: 6px 8px; border: 0; border-right: 1px solid #2a2a2a; }"
+        )
+        # uniformRowHeights caches the row height from the first item; toggling
+        # it off/on and forcing a relayout makes Qt recompute against the new
+        # font + padding immediately, rather than waiting for a model reset.
+        self.tree.setUniformRowHeights(False)
+        self.tree.setUniformRowHeights(True)
+        self.tree.doItemsLayout()
+        self.tree.viewport().update()
+        # Label names the action the button performs (what it switches to),
+        # not the current state — consistent with the app's other toggles.
+        self._compact_btn.setText("Standard" if self._compact else "Compact")
+
+    def _on_compact_clicked(self) -> None:
+        self._compact = not self._compact
+        self._settings.setValue("processes/compact", self._compact)
+        self._apply_density()
 
     # ---- Search
     def _on_search_changed(self, text: str) -> None:
@@ -555,10 +609,23 @@ class ProcessesPage(QWidget):
             act.triggered.connect(lambda _checked=False, p=snap.pid, n=nv: self._renice(p, n))
 
         m.addSeparator()
+        a_cpath = m.addAction("Copy path")
+        a_cpath.setEnabled(bool(snap.exe))
+        a_cpath.triggered.connect(lambda: self._to_clipboard(snap.exe))
+        m.addAction("Copy PID").triggered.connect(
+            lambda: self._to_clipboard(str(snap.pid)))
+        a_ccmd = m.addAction("Copy command line")
+        a_ccmd.setEnabled(bool(snap.cmdline))
+        a_ccmd.triggered.connect(lambda: self._to_clipboard(snap.cmdline))
+
+        m.addSeparator()
         m.addAction("Open file location").triggered.connect(lambda: self._open_loc(snap.pid))
         m.addAction("Properties…").triggered.connect(lambda: self._properties(snap.pid))
 
         m.exec(self.tree.viewport().mapToGlobal(pos))
+
+    def _to_clipboard(self, text: str) -> None:
+        QApplication.clipboard().setText(text or "")
 
     # ---- Actions
     def _signal_pid(self, pid: int, sig: int, confirm: bool) -> None:
