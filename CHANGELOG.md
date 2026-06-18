@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Path** and **Command line** columns in the Processes tab — see a process's full executable path and its complete command line (all arguments), so you can tell apart eight instances of the same script launched with different flags. Both are sortable and hidden by default; **right-click the column header** to show or hide any column (Win11-style), and your choice is remembered between launches.
+- The search box now also matches the executable path, alongside the name, command line, and PID it already searched.
+
+### Note
+- On first launch after upgrading, the Processes column layout (widths/sort) resets once — the saved layout predates the new columns. It persists normally from then on.
+
 ## [0.3.0] — 2026-06-12
 
 Graph readability pass: the sparklines now carry the numbers that give them meaning — per-core clocks, live values, and real axis scales — rendered inside Lindoze's existing dark cards.

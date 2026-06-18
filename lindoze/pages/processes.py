@@ -59,7 +59,14 @@ COLS = [
     ("Disk", 100),
     ("Status", 90),
     ("Threads", 70),
+    ("Path", 220),
+    ("Command line", 360),
 ]
+
+# Columns hidden on first run — Path and Command line are wide and most users
+# don't need them by default. Toggle via the header right-click menu; the
+# choice persists through QHeaderView.saveState() (see window.py).
+DEFAULT_HIDDEN_COLS = {8, 9}
 
 ME = os.getenv("USER") or "aaron"
 
@@ -186,6 +193,8 @@ class ProcessModel(QAbstractItemModel):
                 5: _fmt_bps(s.disk_bps),
                 6: s.status,
                 7: str(s.threads),
+                8: s.exe,
+                9: s.cmdline,
             }.get(col, "")
         return None
 
@@ -279,6 +288,8 @@ class ProcessProxy(QSortFilterProxyModel):
             lambda s: s.disk_bps,
             lambda s: s.status,
             lambda s: s.threads,
+            lambda s: s.exe.lower(),
+            lambda s: s.cmdline.lower(),
         ]
         return getters[col](sl) < getters[col](sr)
 
@@ -295,7 +306,10 @@ class ProcessProxy(QSortFilterProxyModel):
         if snap is None:
             return True
         n = self._needle
-        return n in snap.name.lower() or n in snap.cmdline.lower() or n in str(snap.pid)
+        return (n in snap.name.lower()
+                or n in snap.exe.lower()
+                or n in snap.cmdline.lower()
+                or n in str(snap.pid))
 
 
 class HighlightDelegate(QStyledItemDelegate):
@@ -371,7 +385,7 @@ class ProcessesPage(QWidget):
 
         toolbar = QHBoxLayout()
         self._search = QLineEdit()
-        self._search.setPlaceholderText("Search (name, command line, or PID)")
+        self._search.setPlaceholderText("Search (name, path, command line, or PID)")
         self._search.setClearButtonEnabled(True)
         self._search.setStyleSheet(
             "QLineEdit { background: #2a2a2a; border: 1px solid #444; "
@@ -411,14 +425,19 @@ class ProcessesPage(QWidget):
         # Column widths
         for i, (_, w) in enumerate(COLS):
             self.tree.setColumnWidth(i, w)
+        for i in DEFAULT_HIDDEN_COLS:
+            self.tree.setColumnHidden(i, True)
         self.tree.header().setStretchLastSection(False)
         self.tree.header().setSectionResizeMode(0, QHeaderView.Interactive)
         self.tree.header().setSortIndicator(3, Qt.DescendingOrder)  # CPU% desc by default
+        # Right-click the header to show/hide columns (Win11-style).
+        self.tree.header().setContextMenuPolicy(Qt.CustomContextMenu)
+        self.tree.header().customContextMenuRequested.connect(self._on_header_menu)
         self.tree.selectionModel().selectionChanged.connect(self._on_selection)
 
         self._highlight = HighlightDelegate(self.tree)
-        self.tree.setItemDelegateForColumn(0, self._highlight)
-        self.tree.setItemDelegateForColumn(1, self._highlight)
+        for c in (0, 1, 8, 9):
+            self.tree.setItemDelegateForColumn(c, self._highlight)
 
         self._search.textChanged.connect(self._on_search_changed)
 
@@ -440,6 +459,21 @@ class ProcessesPage(QWidget):
             self._expanded_once = True
         if self._search.text().strip():
             self._on_search_changed(self._search.text())
+
+    # ---- Header column show/hide
+    def _on_header_menu(self, pos) -> None:
+        menu = QMenu(self)
+        for i, (label, _) in enumerate(COLS):
+            act = menu.addAction(label)
+            act.setCheckable(True)
+            act.setChecked(not self.tree.isColumnHidden(i))
+            # Keep Name (col 0) always visible — it's the primary identifier.
+            if i == 0:
+                act.setEnabled(False)
+            act.toggled.connect(
+                lambda checked, col=i: self.tree.setColumnHidden(col, not checked)
+            )
+        menu.exec(self.tree.header().mapToGlobal(pos))
 
     # ---- Search
     def _on_search_changed(self, text: str) -> None:

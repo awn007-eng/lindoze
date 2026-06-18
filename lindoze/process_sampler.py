@@ -17,6 +17,7 @@ class ProcSnap:
     pid: int
     ppid: int
     name: str
+    exe: str
     cmdline: str
     user: str
     cpu_pct: float
@@ -27,7 +28,7 @@ class ProcSnap:
 
 
 _ATTRS = [
-    "pid", "ppid", "name", "username", "memory_info",
+    "pid", "ppid", "name", "exe", "username", "memory_info",
     "num_threads", "status", "cmdline", "io_counters",
 ]
 
@@ -93,6 +94,10 @@ class ProcessSampler(QObject):
                 rss = mem.rss if mem and hasattr(mem, "rss") else 0
                 cmd = info.get("cmdline") or []
                 cmdline = " ".join(cmd) if cmd else (info.get("name") or "")
+                # process_iter stores the exception object as the value on
+                # AccessDenied — keep only real string paths.
+                exe = info.get("exe")
+                exe = exe if isinstance(exe, str) else ""
                 username = info.get("username") or "?"
                 if not isinstance(username, str):  # AccessDenied marker
                     username = "?"
@@ -101,6 +106,7 @@ class ProcessSampler(QObject):
                     pid=info["pid"],
                     ppid=info.get("ppid") or 0,
                     name=info.get("name") or "?",
+                    exe=exe,
                     cmdline=cmdline,
                     user=username,
                     cpu_pct=cpu,
