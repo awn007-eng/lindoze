@@ -20,6 +20,7 @@ from PySide6.QtCore import (
     QAbstractItemModel,
     QModelIndex,
     QSettings,
+    QSize,
     QSortFilterProxyModel,
     Qt,
 )
@@ -27,6 +28,7 @@ from PySide6.QtGui import (
     QAbstractTextDocumentLayout,
     QColor,
     QFont,
+    QFontMetrics,
     QPalette,
     QTextDocument,
 )
@@ -132,11 +134,25 @@ class ProcessModel(QAbstractItemModel):
         self._sys_grp = Node(pid=-1, snap=None, group="system", parent=self._root)
         self._root.children = [self._user_grp, self._sys_grp]
         self._mono, self._mono_bold, self._bold = _make_fonts()
+        self._v_pad = 3
+        self._row_h = self._compute_row_height()
 
-    def set_point_size(self, point_size: float | None) -> None:
-        """Rebuild the role fonts at a new size (compact density). The view
-        relayout that follows re-queries these via the FontRole."""
+    def _compute_row_height(self) -> int:
+        """Pin one row height for the whole view. Columns paint with different
+        fonts (proportional names vs. mono numbers) whose line heights differ;
+        with uniformRowHeights, Qt would otherwise sample whichever column is
+        leftmost-visible and the height would flicker during horizontal scroll
+        (tbone's bug). Taking the max of both fonts up front makes it stable."""
+        m = max(QFontMetrics(self._mono).height(), QFontMetrics(self._bold).height())
+        return m + self._v_pad * 2
+
+    def set_point_size(self, point_size: float | None, v_pad: int = 3) -> None:
+        """Rebuild the role fonts at a new size (compact density) and recompute
+        the pinned row height. The view relayout that follows re-queries the
+        fonts via FontRole and the height via SizeHintRole."""
         self._mono, self._mono_bold, self._bold = _make_fonts(point_size)
+        self._v_pad = v_pad
+        self._row_h = self._compute_row_height()
 
     # ---- QAbstractItemModel
     def rowCount(self, parent=QModelIndex()):
@@ -174,6 +190,9 @@ class ProcessModel(QAbstractItemModel):
         node: Node = idx.internalPointer()
         col = idx.column()
 
+        if role == Qt.SizeHintRole:
+            # Width 0 → let the column/delegate decide width; we only pin height.
+            return QSize(0, self._row_h)
         if role == Qt.TextAlignmentRole and col in NUMERIC_COLS:
             return _ALIGN_RIGHT_VCENTER
         if role == Qt.FontRole:
@@ -524,24 +543,24 @@ class ProcessesPage(QWidget):
         # fonts — the numeric columns paint with their own mono font, so view
         # font alone wouldn't move uniformRowHeights' (max) row height.
         pt = (self._base_pt - 1.0) if self._compact else self._base_pt
-        self._model.set_point_size(pt)
+        v_pad = 1 if self._compact else 3
+        self._model.set_point_size(pt, v_pad)
         view_font = self.tree.font()
         view_font.setPointSizeF(pt)
         self.tree.setFont(view_font)
 
-        item_pad = "0px 4px" if self._compact else "3px 4px"
+        # Horizontal padding only — the model's SizeHintRole owns row height now,
+        # so vertical padding here would just fight it. Keep a hairline so text
+        # isn't flush against the column edge.
         self.tree.setStyleSheet(
             "QTreeView { background: #1a1a1a; alternate-background-color: #1f1f1f; "
             "color: #ddd; border: none; selection-background-color: #2d4a5a; } "
-            f"QTreeView::item {{ padding: {item_pad}; }} "
+            "QTreeView::item { padding: 0px 4px; } "
             "QHeaderView::section { background: #232323; color: #ccc; "
             "padding: 6px 8px; border: 0; border-right: 1px solid #2a2a2a; }"
         )
-        # uniformRowHeights caches the row height from the first item; toggling
-        # it off/on and forcing a relayout makes Qt recompute against the new
-        # font + padding immediately, rather than waiting for a model reset.
-        self.tree.setUniformRowHeights(False)
-        self.tree.setUniformRowHeights(True)
+        # The model's row height changed; force the view to re-read SizeHintRole
+        # now instead of waiting for the next model reset.
         self.tree.doItemsLayout()
         self.tree.viewport().update()
         # Label names the action the button performs (what it switches to),
