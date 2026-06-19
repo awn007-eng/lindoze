@@ -1,5 +1,5 @@
 Name:           lindoze
-Version:        0.5.0
+Version:        0.5.1
 Release:        1%{?dist}
 Summary:        Linux system monitor with the layout of Windows 11 Task Manager
 
@@ -60,6 +60,9 @@ desktop-file-validate %{buildroot}%{_datadir}/applications/%{name}.desktop
 %{_datadir}/icons/hicolor/scalable/apps/%{name}.svg
 
 %changelog
+* Thu Jun 18 2026 Aaron <awn007@gmail.com> - 0.5.1-1
+- Processes: fix row-height flicker during horizontal scroll in Compact mode.
+
 * Thu Jun 18 2026 Aaron <awn007@gmail.com> - 0.5.0-1
 - Processes: Copy path/PID/command line context-menu entries, a Compact/Standard
   row-density toggle, and lower CPU (the sampler caches immutable per-process

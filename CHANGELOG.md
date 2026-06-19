@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.1] — 2026-06-18
+
+### Fixed
+- Process list: row height no longer flickers during horizontal scrolling in
+  Compact mode. The view now pins a single row height instead of sampling
+  whichever column was leftmost-visible (whose font height could differ).
+  Reported by tbone26-fed.
+
 ## [0.5.0] — 2026-06-18
 
 Power-user pass driven by forum feedback (tbone26-fed): denser process list, clipboard actions, a leaner sampler, and a window you can pin and shrink into a corner.
@@ -137,7 +145,8 @@ First public release — a Linux system monitor laid out like Windows 11 Task Ma
 - **Processes tab** — sortable tree, search, end-task / kill / suspend / renice.
 - **Startup apps tab** — one-click toggle with 10-second undo.
 
-[Unreleased]: https://github.com/awn007-eng/lindoze/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/awn007-eng/lindoze/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/awn007-eng/lindoze/releases/tag/v0.5.1
 [0.5.0]: https://github.com/awn007-eng/lindoze/releases/tag/v0.5.0
 [0.4.0]: https://github.com/awn007-eng/lindoze/releases/tag/v0.4.0
 [0.3.0]: https://github.com/awn007-eng/lindoze/releases/tag/v0.3.0
