@@ -254,7 +254,7 @@ class CPUPage(QWidget):
         a = QAction("Change graph to → Overall utilization", self)
         a.triggered.connect(lambda: self._stack.setCurrentIndex(0))
         m.addAction(a)
-        m.exec(self.mapToGlobal(pos))
+        m.exec(self._grid_w.mapToGlobal(pos))
 
     def _toggle_view(self) -> None:
         # Button text names the destination, not the current view.

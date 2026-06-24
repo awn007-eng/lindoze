@@ -170,7 +170,7 @@ class PerformancePage(QWidget):
         self._settings.setValue("performance/time_scale", seconds)
 
     def _add_entry(self, row: SidebarRow, page: QWidget) -> None:
-        item = QListWidgetItem(self.sidebar)
+        item = QListWidgetItem()
         item.setSizeHint(QSize(220, 52))
         self.sidebar.addItem(item)
         self.sidebar.setItemWidget(item, row)
