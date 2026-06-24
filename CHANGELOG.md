@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.2] — 2026-06-24
+
+### Fixed
+- Performance sidebar: rows are no longer added twice (the list item was inserted
+  both via its parent constructor and `addItem`), which could desync the per-row
+  value updates.
+- CPU page: the per-core grid's right-click menu now appears under the cursor — it
+  was mapping coordinates from the wrong widget and popping up offset.
+- Sampler: a failing GPU backend (driver hiccup, subprocess error) no longer takes
+  down the entire sampling tick; it degrades gracefully for that frame.
+- Window: sampler timers are now stopped on close, so nothing keeps firing after
+  the window is destroyed.
+
 ## [0.5.1] — 2026-06-18
 
 ### Fixed
@@ -145,7 +158,8 @@ First public release — a Linux system monitor laid out like Windows 11 Task Ma
 - **Processes tab** — sortable tree, search, end-task / kill / suspend / renice.
 - **Startup apps tab** — one-click toggle with 10-second undo.
 
-[Unreleased]: https://github.com/awn007-eng/lindoze/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/awn007-eng/lindoze/compare/v0.5.2...HEAD
+[0.5.2]: https://github.com/awn007-eng/lindoze/releases/tag/v0.5.2
 [0.5.1]: https://github.com/awn007-eng/lindoze/releases/tag/v0.5.1
 [0.5.0]: https://github.com/awn007-eng/lindoze/releases/tag/v0.5.0
 [0.4.0]: https://github.com/awn007-eng/lindoze/releases/tag/v0.4.0
