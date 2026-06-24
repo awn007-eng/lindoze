@@ -11,6 +11,15 @@ from .gpu_backends import detect_gpus
 _GPUS = detect_gpus()
 
 
+def _safe_gpu_sample(g) -> dict:
+    """A failing GPU backend (driver hiccup, subprocess error) must not take down
+    the whole sampler tick. Degrade to an empty dict; GPUPage skips empty samples."""
+    try:
+        return g.sample()
+    except Exception:
+        return {}
+
+
 @dataclass
 class Sample:
     ts: float
@@ -85,6 +94,9 @@ class Sampler(QObject):
     def start(self) -> None:
         self._timer.start()
 
+    def stop(self) -> None:
+        self._timer.stop()
+
     def _tick(self) -> None:
         now = time.monotonic()
         dt = max(now - self._prev_ts, 1e-6)
@@ -149,6 +161,6 @@ class Sampler(QObject):
             net_tx_bps=n_tx,
             proc_count=len(pids),
             thread_count=thread_count,
-            gpus=[g.sample() for g in _GPUS],
+            gpus=[_safe_gpu_sample(g) for g in _GPUS],
         )
         self.sample_ready.emit(sample)

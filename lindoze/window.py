@@ -197,4 +197,7 @@ class MainWindow(QMainWindow):
             "processes/header_state",
             self.processes_page.tree.header().saveState(),
         )
+        # Stop sampler timers so nothing keeps firing after the window is gone.
+        self.sampler.stop()
+        self.process_sampler.set_active(False)
         super().closeEvent(event)
