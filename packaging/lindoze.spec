@@ -1,5 +1,5 @@
 Name:           lindoze
-Version:        0.5.1
+Version:        0.6.0
 Release:        1%{?dist}
 Summary:        Linux system monitor with the layout of Windows 11 Task Manager
 
@@ -60,6 +60,16 @@ desktop-file-validate %{buildroot}%{_datadir}/applications/%{name}.desktop
 %{_datadir}/icons/hicolor/scalable/apps/%{name}.svg
 
 %changelog
+* Fri Jun 26 2026 Aaron <awn007@gmail.com> - 0.6.0-1
+- Processes: multi-select (Ctrl/Shift-click) with batch End/Kill actions; the End
+  button and a new right-click menu act on the whole selection.
+- Performance: the current-value readout stays legible at high utilisation (a dark
+  halo keeps it from washing into the area fill).
+
+* Wed Jun 24 2026 Aaron <awn007@gmail.com> - 0.5.2-1
+- Audit fixes: duplicate Performance sidebar row, offset CPU-grid context menu,
+  GPU-backend failure isolation, and sampler timer cleanup on window close.
+
 * Thu Jun 18 2026 Aaron <awn007@gmail.com> - 0.5.1-1
 - Processes: fix row-height flicker during horizontal scroll in Compact mode.
 

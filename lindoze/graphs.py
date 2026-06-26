@@ -14,6 +14,12 @@ BG_COLOR = QColor("#1f1f1f")
 LABEL_COLOR = QColor(220, 220, 220)
 SUBLABEL_COLOR = QColor(170, 170, 170)
 
+# A 1px dark halo painted behind the accent-coloured value readout so the
+# number stays legible when a tall (high-utilisation) area fill rises up
+# behind it in the same hue. Invisible against the dark card at idle.
+_HALO_COLOR = QColor(0, 0, 0, 180)
+_HALO_OFFSETS = ((-1, 0), (1, 0), (0, -1), (0, 1))
+
 
 def _pct_fmt(v: float) -> str:
     return f"{v:.0f}%"
@@ -245,6 +251,24 @@ class MiniGraph(QWidget):
         self._paint_overlays(p, r)
         p.end()
 
+    def _draw_readout_at(self, p: QPainter, x: int, baseline: int, text: str,
+                         color: QColor) -> None:
+        """Draw a value readout at a baseline point with a dark halo behind it."""
+        p.setPen(_HALO_COLOR)
+        for dx, dy in _HALO_OFFSETS:
+            p.drawText(x + dx, baseline + dy, text)
+        p.setPen(color)
+        p.drawText(x, baseline, text)
+
+    def _draw_readout_rect(self, p: QPainter, rect, flags, text: str,
+                           color: QColor) -> None:
+        """Halo'd readout positioned by an aligned rect (compact cells)."""
+        p.setPen(_HALO_COLOR)
+        for dx, dy in _HALO_OFFSETS:
+            p.drawText(rect.translated(dx, dy), flags, text)
+        p.setPen(color)
+        p.drawText(rect, flags, text)
+
     def _paint_overlays(self, p: QPainter, r) -> None:
         inner = r.adjusted(4, 2, -4, -4)
 
@@ -280,17 +304,17 @@ class MiniGraph(QWidget):
             fm = p.fontMetrics()
             if self.compact:
                 # Leave the top row for "CPU N" + MHz; value sits bottom-left.
-                p.setPen(self.accent)
-                p.drawText(inner, Qt.AlignBottom | Qt.AlignLeft, self.value_fmt(self.current()))
+                self._draw_readout_rect(p, inner, Qt.AlignBottom | Qt.AlignLeft,
+                                        self.value_fmt(self.current()), self.accent)
             elif self._buf2 is not None:
-                p.setPen(self.accent)
-                p.drawText(inner.left(), y + fm.ascent(), self.value_fmt(self.current()))
+                self._draw_readout_at(p, inner.left(), y + fm.ascent(),
+                                      self.value_fmt(self.current()), self.accent)
                 y += fm.height()
-                p.setPen(self.accent2)
-                p.drawText(inner.left(), y + fm.ascent(), self.value_fmt(self.current2()))
+                self._draw_readout_at(p, inner.left(), y + fm.ascent(),
+                                      self.value_fmt(self.current2()), self.accent2)
             else:
-                p.setPen(self.accent)
-                p.drawText(inner.left(), y + fm.ascent(), self.value_fmt(self.current()))
+                self._draw_readout_at(p, inner.left(), y + fm.ascent(),
+                                      self.value_fmt(self.current()), self.accent)
 
         # Dual-series legend, bottom-right.
         if self._buf2 is not None and (self.label or self.label2):

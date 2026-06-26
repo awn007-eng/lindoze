@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-06-26
+
+### Added
+- **Processes — multi-select batch actions.** Ctrl/Shift-click to select several
+  processes and End or Kill them in one go. The toolbar button reflects the
+  selection ("End 3 tasks"), and a batch right-click menu offers "End N tasks" and
+  "Kill N tasks (SIGKILL)". Processes you don't own are skipped, and batch actions
+  ask for confirmation before signalling.
+
+### Fixed
+- **Performance graphs — readable value readout under load.** The current-value
+  number on each graph (e.g. CPU %) now keeps a subtle dark halo, so it stays
+  legible when the area fill climbs behind it in the same accent colour at high
+  utilisation instead of washing out.
+
 ## [0.5.2] — 2026-06-24
 
 ### Fixed

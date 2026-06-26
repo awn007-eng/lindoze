@@ -463,6 +463,9 @@ class ProcessesPage(QWidget):
         self.tree.setAlternatingRowColors(True)
         self.tree.setUniformRowHeights(True)
         self.tree.setSelectionBehavior(QAbstractItemView.SelectRows)
+        # Ctrl/Shift-click to select several processes and act on them at once
+        # (batch End/Kill). Single-click still selects one row as before.
+        self.tree.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.tree.setRootIsDecorated(True)
         self.tree.setExpandsOnDoubleClick(True)
         self.tree.setContextMenuPolicy(Qt.CustomContextMenu)
@@ -607,26 +610,38 @@ class ProcessesPage(QWidget):
 
     # ---- Selection
     def _on_selection(self, *_args) -> None:
-        snap = self._selected_snap()
-        self._end_btn.setEnabled(bool(snap and snap.user == ME))
+        owned = [s for s in self._selected_snaps() if s.user == ME]
+        self._end_btn.setEnabled(bool(owned))
+        # Name the count so it's clear the button acts on the whole selection.
+        self._end_btn.setText("End task" if len(owned) <= 1 else f"End {len(owned)} tasks")
 
-    def _selected_snap(self) -> Optional[ProcSnap]:
-        idx = self.tree.currentIndex()
-        if not idx.isValid():
-            return None
-        src = self._proxy.mapToSource(idx)
-        node: Node = src.internalPointer()
-        return node.snap
+    def _selected_snaps(self) -> list[ProcSnap]:
+        """Every selected process leaf (group headers excluded)."""
+        snaps: list[ProcSnap] = []
+        for idx in self.tree.selectionModel().selectedRows():
+            node: Node = self._proxy.mapToSource(idx).internalPointer()
+            if node is not None and node.snap is not None:
+                snaps.append(node.snap)
+        return snaps
 
     # ---- Context menu
     def _on_context_menu(self, pos) -> None:
         idx = self.tree.indexAt(pos)
         if not idx.isValid():
             return
-        self.tree.setCurrentIndex(idx)
-        snap = self._selected_snap()
-        if snap is None:
+        # Right-clicking a row outside the current multi-selection focuses just
+        # that row; clicking within an existing selection keeps it intact so the
+        # batch actions operate on everything highlighted.
+        if not self.tree.selectionModel().isRowSelected(idx.row(), idx.parent()):
+            self.tree.setCurrentIndex(idx)
+
+        snaps = self._selected_snaps()
+        if not snaps:
             return
+        if len(snaps) > 1:
+            self._batch_context_menu(snaps, pos)
+            return
+        snap = snaps[0]
         owned = snap.user == ME
 
         m = QMenu(self)
@@ -672,26 +687,64 @@ class ProcessesPage(QWidget):
 
         m.exec(self.tree.viewport().mapToGlobal(pos))
 
+    def _batch_context_menu(self, snaps: list[ProcSnap], pos) -> None:
+        owned = [s for s in snaps if s.user == ME]
+        n = len(owned)
+        plural = "s" if n != 1 else ""
+        m = QMenu(self)
+        a_end = m.addAction(f"End {n} task{plural}")
+        a_end.setEnabled(bool(owned))
+        a_end.triggered.connect(
+            lambda: self._signal_pids([s.pid for s in owned], signal.SIGTERM, confirm=True))
+        a_kill = m.addAction(f"Kill {n} task{plural} (SIGKILL)")
+        a_kill.setEnabled(bool(owned))
+        a_kill.triggered.connect(
+            lambda: self._signal_pids([s.pid for s in owned], signal.SIGKILL, confirm=True))
+        skipped = len(snaps) - n
+        if skipped:
+            m.addSeparator()
+            info = m.addAction(f"{skipped} selected not owned by you — skipped")
+            info.setEnabled(False)
+        m.exec(self.tree.viewport().mapToGlobal(pos))
+
     def _to_clipboard(self, text: str) -> None:
         QApplication.clipboard().setText(text or "")
 
     # ---- Actions
     def _signal_pid(self, pid: int, sig: int, confirm: bool) -> None:
+        self._signal_pids([pid], sig, confirm)
+
+    def _signal_pids(self, pids: list[int], sig: int, confirm: bool) -> None:
+        pids = list(pids)
+        if not pids:
+            return
         if confirm:
+            subj = "the process" if len(pids) == 1 else "them"
+            target = f"PID {pids[0]}" if len(pids) == 1 else f"{len(pids)} processes"
+            if sig == signal.SIGKILL:
+                body = (f"Send SIGKILL to {target}? This forcibly terminates "
+                        f"{subj} and unsaved data may be lost.")
+            else:
+                body = f"End {target}? Running processes will be asked to terminate."
             ans = QMessageBox.question(
-                self, "Confirm",
-                f"Send SIGKILL to PID {pid}? This forcibly terminates the process "
-                f"and unsaved data may be lost.",
+                self, "Confirm", body,
                 QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
             )
             if ans != QMessageBox.Yes:
                 return
-        try:
-            os.kill(pid, sig)
-        except ProcessLookupError:
-            pass  # already gone
-        except PermissionError as e:
-            QMessageBox.warning(self, "Permission denied", str(e))
+        denied: list[int] = []
+        for pid in pids:
+            try:
+                os.kill(pid, sig)
+            except ProcessLookupError:
+                pass  # already gone
+            except PermissionError:
+                denied.append(pid)
+        if denied:
+            QMessageBox.warning(
+                self, "Permission denied",
+                "Could not signal PID(s): " + ", ".join(str(p) for p in denied),
+            )
 
     def _renice(self, pid: int, nice: int) -> None:
         try:
@@ -752,6 +805,8 @@ class ProcessesPage(QWidget):
         QMessageBox.information(self, f"Properties — PID {pid}", text)
 
     def _end_task_selected(self) -> None:
-        snap = self._selected_snap()
-        if snap:
-            self._signal_pid(snap.pid, signal.SIGTERM, confirm=False)
+        pids = [s.pid for s in self._selected_snaps() if s.user == ME]
+        if not pids:
+            return
+        # Confirm only when ending several at once — single End stays one-click.
+        self._signal_pids(pids, signal.SIGTERM, confirm=len(pids) > 1)
