@@ -38,9 +38,10 @@ color-coded traces sharing an axis, with live values and a real scale label:
 
 ![Network receive/send graph](https://raw.githubusercontent.com/awn007-eng/lindoze/main/docs/screenshots/net.png?v=0.3.0)
 
-Processes tab — sortable tree, search, end-task / kill / suspend / renice:
+Processes tab — Grouped or Flat views, multi-select batch actions, search, and
+per-process controls (here in Flat view, sorted by CPU with three tasks selected):
 
-![Processes tab](https://raw.githubusercontent.com/awn007-eng/lindoze/main/docs/screenshots/processes.png?v=0.2.5)
+![Processes tab](https://raw.githubusercontent.com/awn007-eng/lindoze/main/docs/screenshots/processes.png?v=0.7.0)
 
 Startup apps tab — toggle XDG autostart entries with a 10-second undo:
 
@@ -54,11 +55,18 @@ Startup apps tab — toggle XDG autostart entries with a 10-second undo:
   - **GPU** — NVIDIA (via NVML), AMD (via sysfs), Intel (experimental — i915 perf PMU + hwmon); multi-GPU systems show one page per GPU
   - **Disk** — per-physical-device R/W throughput
   - **Network** — per-interface RX/TX throughput
-- **Processes tab** — sortable tree with User / System grouping
+- **Processes tab** — sortable tree, multiple view shapes
+  - **View** menu — **Grouped** (collapsible User / System groups), **Flat** (one
+    global list, so sorting by CPU surfaces the hottest process *anywhere* at the
+    top), or **User only / System only**; your choice is remembered
+  - **Multi-select** — Ctrl/Shift-click several processes and act on them at once:
+    batch End / Kill / Suspend / Resume / Set priority, plus **Copy PIDs / paths /
+    command lines** to the clipboard one per line. Processes you don't own are skipped.
   - Search across name, executable path, full command line, and PID
   - Selectable columns — show/hide the full **executable path** and **command line**
     (all arguments) from the **Columns** menu; your choice is remembered
-  - **Compact / Standard** row density toggle — fit more processes per screen
+  - **Compact / Standard** row density toggle — tightens row padding to fit more
+    processes per screen (the font size stays legible)
   - Right-click actions: End task, Kill, Suspend/Resume, Set priority,
     **Copy path / Copy PID / Copy command line**, Open file location, Properties
 - **Startup apps tab** — `~/.config/autostart/*.desktop` entries; one-click toggle with

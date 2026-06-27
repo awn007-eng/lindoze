@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] — 2026-06-26
+
+### Added
+- **Processes — View modes.** A new "View" toolbar menu switches the process list
+  between **Grouped** (the existing collapsible User / System groups), **Flat (all)**
+  — a single global list, so sorting by CPU finally puts the hottest process from
+  *any* user at the very top instead of only within its group — and **User only** /
+  **System only**. The choice persists across restarts.
+- **Processes — multi-select gets the full action set.** Beyond batch End / Kill,
+  a multi-selection can now be **Suspended / Resumed**, have its **priority set**, and
+  be copied to the clipboard as **PIDs / paths / command lines** (one value per line).
+  Copy works on the whole selection; signalling and renice skip processes you don't own.
+
+### Changed
+- **Processes — Compact density tightens padding, not the font.** Compact mode used to
+  shrink the row font as well; it now reduces only the vertical row padding, so more
+  rows fit on screen while the text stays at full, legible size.
+
+### Fixed
+- **Processes — search highlight alignment.** Cells containing a search match are
+  rendered through a rich-text path that drew the text top-aligned; matched rows could
+  sit slightly higher than their neighbours. The highlighted text is now vertically
+  centered to match every other cell, in both density modes.
+
 ## [0.6.0] — 2026-06-26
 
 ### Added

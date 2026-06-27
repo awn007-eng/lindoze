@@ -1,5 +1,5 @@
 Name:           lindoze
-Version:        0.6.0
+Version:        0.7.0
 Release:        1%{?dist}
 Summary:        Linux system monitor with the layout of Windows 11 Task Manager
 
@@ -60,6 +60,15 @@ desktop-file-validate %{buildroot}%{_datadir}/applications/%{name}.desktop
 %{_datadir}/icons/hicolor/scalable/apps/%{name}.svg
 
 %changelog
+* Fri Jun 26 2026 Aaron <awn007@gmail.com> - 0.7.0-1
+- Processes: new View menu — Grouped / Flat (all) / User only / System only. Flat
+  is one global list, so sorting by CPU surfaces the hottest process from any user
+  at the top instead of only within its group.
+- Processes: multi-select gains Suspend/Resume, Set priority, and Copy PIDs / paths
+  / command lines (one per line) in addition to batch End/Kill.
+- Processes: Compact density now tightens row padding only, keeping the font full
+  size; search-highlighted cells are vertically aligned with their neighbours.
+
 * Fri Jun 26 2026 Aaron <awn007@gmail.com> - 0.6.0-1
 - Processes: multi-select (Ctrl/Shift-click) with batch End/Kill actions; the End
   button and a new right-click menu act on the whole selection.
