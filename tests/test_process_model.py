@@ -11,6 +11,12 @@ import os
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
+
+# CI installs only psutil + pytest (no PySide6) to stay fast; these model tests
+# need Qt, so skip the whole module cleanly when it isn't available rather than
+# erroring at collection. Locally (the dev venv) PySide6 is present and they run.
+pytest.importorskip("PySide6")
+
 from PySide6.QtCore import QModelIndex
 from PySide6.QtWidgets import QApplication
 
